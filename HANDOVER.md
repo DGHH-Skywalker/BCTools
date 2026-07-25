@@ -311,7 +311,7 @@ cd backend
 go run .
 ```
 
-### 6.2 生产构建（推荐：python build.py 一键完成）
+### 6.2 生产构建
 
 ```bash
 cd frontend
@@ -319,7 +319,9 @@ npm run type-check
 npm run build
 
 cd ..
-# build.py 已自动完成此步骤
+rm -rf backend/embed/dist
+mkdir -p backend/embed/dist
+cp -r frontend/dist/* backend/embed/dist/
 
 cd backend
 go mod tidy
@@ -389,14 +391,6 @@ curl -F "file=@test.mp3" http://localhost:1743/api/files/process
 - [ ] **前端测试**：目前仅依赖 `type-check`，没有编写业务单元测试。
 
 ---
-
-
-### 7.3 v2.1 新增
-- [x] 网站图标：使用 logo.png 作为 favicon
-- [x] 程序图标：使用 icon.ico + resource.syso 嵌入 exe
-- [x] 隐藏控制台：go build 使用 -H windowsgui，启动无黑框
-- [x] 关闭即退出：前端 beforeunload 时 POST /api/shutdown，后端自动保存并退出
-- [x] dist/ 打包：broadcast-tool.exe + ffmpeg.exe + ffprobe.exe
 
 ## 8. 常用调试
 
