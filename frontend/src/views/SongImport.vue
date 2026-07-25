@@ -14,8 +14,8 @@
         :songs-map="songsMap"
         selection-mode="single"
         @date-click="onDateClick"
-        @update:year="year = "
-        @update:month="month = "
+        @update:year="year = $event"
+        @update:month="month = $event"
       />
     </template>
 
@@ -23,7 +23,7 @@
       <n-alert v-if="error" type="error" closable @close="error=''" style="margin-bottom:12px;">{{ error }}</n-alert>
       <n-alert v-if="noSlots" type="warning" style="margin-bottom:12px;">{{ t("songImport.noSlots") }}</n-alert>
 
-      <n-card v-if="existingSongs.length > 0" style="margin-bottom:16px;" :title="existingTitle"">
+      <n-card v-if="existingSongs.length > 0" style="margin-bottom:16px;" :title="existingTitle">
         <n-list>
           <n-list-item v-for="song in existingSongs" :key="song.id">
             <n-space align="center" justify="space-between" style="width:100%;" wrap>
