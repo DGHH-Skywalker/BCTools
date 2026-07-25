@@ -5,14 +5,13 @@
       <n-menu :collapsed="collapsed" :collapsed-width="64" :collapsed-icon-size="22" :value="activeKey" :options="menuOptions" @update:value="onMenuChange" />
     </n-layout-sider>
     <n-layout>
-      <n-layout-header style="padding:8px 16px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center;">
-        <n-h3 style="margin:0;">{{ t("app.title") }}</n-h3>
-        <n-button-group size="small" v-if="config.languageSwitchEnabled">
+      <n-layout-header v-if="config.languageSwitchEnabled" style="padding:8px 16px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;justify-content:flex-end;align-items:center;">
+        <n-button-group size="small">
           <n-button :type="currentLocale==='zh-CN'?'primary':'default'" @click="switchLang('zh-CN')">中</n-button>
           <n-button :type="currentLocale==='en'?'primary':'default'" @click="switchLang('en')">EN</n-button>
         </n-button-group>
       </n-layout-header>
-      <n-layout-content style="padding:0;background:#f5f7fa;">
+      <n-layout-content style="padding:0;">
         <router-view />
       </n-layout-content>
     </n-layout>
@@ -41,7 +40,6 @@ const menuOptions: MenuOption[] = [
   { key: "/export", label: () => t("nav.export"), icon: () => h(NIcon, null, "📤") },
   { key: "/organize", label: () => t("nav.organize"), icon: () => h(NIcon, null, "📁") },
   { key: "/settings", label: () => t("nav.settings"), icon: () => h(NIcon, null, "⚙️") },
-  { key: "/guide", label: () => t("nav.guide"), icon: () => h(NIcon, null, "📖") },
   { key: "/about", label: () => t("nav.about"), icon: () => h(NIcon, null, "ℹ️") },
 ]
 const activeKey = computed(() => route.path)

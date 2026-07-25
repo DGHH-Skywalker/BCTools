@@ -11,7 +11,6 @@ const routes: RouteRecordRaw[] = [
     { path: "export", component: () => import("../views/Export.vue"), meta: { title: "歌单导出" } },
     { path: "organize", component: () => import("../views/Organize.vue"), meta: { title: "换卡工具" } },
     { path: "settings", component: () => import("../views/Settings.vue"), meta: { title: "软件设置" } },
-    { path: "guide", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } },
     { path: "about", component: () => import("../views/About.vue"), meta: { title: "软件作者" } },
     { path: "error", component: () => import("../views/Error.vue"), meta: { title: "出错了" } },
   ]},
