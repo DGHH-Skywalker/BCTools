@@ -1,14 +1,16 @@
 <template>
-  <!-- 右下角浮动按钮（收起态） -->
-  <n-button
+  <!-- 右下角浮动按钮 -->
+  <n-float-button
     v-if="!player.isVisible.value"
-    circle
-    :style="{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000, fontSize: '20px' }"
+    :right="20"
+    :bottom="20"
     @click="player.show()"
     title="音频播放器"
   >
-    🎵
-  </n-button>
+    <template #icon>🎵</template>
+  </n-float-button>
+
+  <!-- 播放器卡片 -->
   <n-card
     v-else
     :style="{ position: 'fixed', bottom: '16px', right: '16px', zIndex: 1000, width: '320px' }"
@@ -25,42 +27,48 @@
         <n-button text size="tiny" @click="player.hide()">✕</n-button>
       </n-space>
     </template>
-    <audio
-      ref="audioRef"
-      :src="audioSrc"
-      controls
-      style="width:100%;height:36px;display:block;"
-    />
+
+    <n-space vertical style="width:100%;">
+      <!-- 进度条 -->
+      <n-slider
+        :value="player.currentTime.value"
+        :max="player.duration.value || 1"
+        :step="1"
+        :disabled="!player.duration.value"
+        @update:value="player.seek"
+      />
+
+      <n-space align="center" justify="space-between" style="width:100%;">
+        <n-text depth="3" style="font-size:12px;">
+          {{ formatDuration(player.currentTime.value) }} / {{ formatDuration(player.duration.value) }}
+        </n-text>
+
+        <n-space>
+          <n-button
+            size="small"
+            :disabled="!player.currentFile.value"
+            @click="togglePlay"
+          >
+            {{ player.isPlaying.value ? '暂停' : '播放' }}
+          </n-button>
+          <n-button size="small" :disabled="!player.currentFile.value" @click="player.stop()">停止</n-button>
+        </n-space>
+      </n-space>
+    </n-space>
   </n-card>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
-import { NButton, NCard, NSpace, NText, NEllipsis } from "naive-ui"
-import { useAudioPlayer } from "../../composables/useAudioPlayer"
+import { NEllipsis, NText } from "naive-ui"
+import { useAudioPlayer, formatDuration } from "../../composables/useAudioPlayer"
 
 const player = useAudioPlayer()
-const audioRef = ref<HTMLAudioElement | null>(null)
 
-const audioSrc = computed(() => {
-  if (!player.currentFile.value) return ""
-  return `/api/files/preview?file=${encodeURIComponent(player.currentFile.value)}`
-})
-
-watch(() => player.currentFile.value, (newFile, oldFile) => {
-  if (newFile && newFile !== oldFile && audioRef.value) {
-    audioRef.value.src = audioSrc.value
-    audioRef.value.play().catch(() => {})
+function togglePlay() {
+  if (player.isPlaying.value) {
+    player.pause()
+  } else {
+    player.resume()
   }
-})
-
-watch(() => player.isPlaying.value, (playing) => {
-  if (!audioRef.value) return
-  if (playing && audioRef.value.paused) {
-    audioRef.value.play().catch(() => {})
-  } else if (!playing && !audioRef.value.paused) {
-    audioRef.value.pause()
-  }
-})
+}
 </script>
-
