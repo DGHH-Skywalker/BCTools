@@ -42,7 +42,7 @@ func (c *FFMpegConverter) Probe(filePath string) (ProbeResult, error) {
 		probePath = c.ffmpegPath
 	}
 
-	cmd := exec.CommandContext(ctx, probePath,
+	cmd := createCommand(ctx, probePath,
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_format",
@@ -65,7 +65,7 @@ func (c *FFMpegConverter) ConvertToMP3(inputPath, outputPath string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.ffmpegPath,
+	cmd := createCommand(ctx, c.ffmpegPath,
 		"-y",
 		"-i", inputPath,
 		"-vn",
@@ -88,7 +88,7 @@ func (c *FFMpegConverter) GenerateSilentMP3(outputPath string, durationSec int) 
 	defer cancel()
 
 	dur := fmt.Sprintf("%d", durationSec)
-	cmd := exec.CommandContext(ctx, c.ffmpegPath,
+	cmd := createCommand(ctx, c.ffmpegPath,
 		"-y",
 		"-f", "lavfi",
 		"-i", "anullsrc=r=44100:cl=mono",

@@ -107,14 +107,14 @@ function onPanelChange(info: { year: number; month: number }) {
 }
 
 .calendar-wrapper :deep(.n-calendar-date) {
-  min-height: 72px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .calendar-wrapper :deep(.n-calendar-date__date) {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -123,9 +123,9 @@ function onPanelChange(info: { year: number; month: number }) {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  min-height: 64px;
+  min-height: 32px;
   width: 100%;
-  padding: 4px;
+  padding: 2px;
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.15s;
@@ -145,11 +145,11 @@ function onPanelChange(info: { year: number; month: number }) {
 }
 
 .slot-badge {
-  margin-top: 2px;
-  font-size: 11px;
-  padding: 1px 5px;
-  border-radius: 10px;
-  line-height: 1.4;
+  margin-top: 1px;
+  font-size: 9px;
+  padding: 0 3px;
+  border-radius: 8px;
+  line-height: 1.3;
 }
 
 .slot-badge.partial {
@@ -167,10 +167,10 @@ function onPanelChange(info: { year: number; month: number }) {
     max-width: 100%;
   }
   .calendar-wrapper :deep(.n-calendar-date) {
-    min-height: 56px;
+    min-height: 32px;
   }
   .calendar-cell {
-    min-height: 48px;
+    min-height: 28px;
   }
 }
 </style>

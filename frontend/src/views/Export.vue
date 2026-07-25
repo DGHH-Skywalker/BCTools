@@ -10,6 +10,23 @@
       <n-button size="small" @click="quickSelect(-1)">{{ t("export.lastWeek") }}</n-button>
       <n-button size="small" @click="quickSelect(1)">{{ t("export.nextWeek") }}</n-button>
     </n-space>
+    <n-radio-group v-model:value="exportStore.templateType" style="margin-bottom:12px;display:block;">
+      <n-radio value="simple">{{ t("export.templateSimple") }}</n-radio>
+      <n-radio value="poster">{{ t("export.templatePoster") }}</n-radio>
+    </n-radio-group>
+    <div v-if="exportStore.templateType === 'poster'" style="margin-bottom:12px;padding:12px;border:1px solid #e0e0e0;border-radius:6px;">
+      <n-space vertical>
+        <n-space align="center">
+          <span>{{ t("export.background") }}</span>
+          <input type="file" accept="image/*" @change="onBackgroundFileChange">
+          <n-button v-if="exportStore.backgroundImage" size="tiny" @click="exportStore.backgroundImage = null">{{ t("common.delete") }}</n-button>
+        </n-space>
+        <n-space align="center">
+          <span>{{ t("export.backgroundColor") }}</span>
+          <n-color-picker v-model:value="exportStore.backgroundColor" style="width:160px;" :show-alpha="false" />
+        </n-space>
+      </n-space>
+    </div>
     <CalendarGrid :year="year" :month="month" :songs-map="songsMap" selection-mode="multiple" :selected-dates="exportStore.selectedDates" @selection-change="exportStore.setDates" @update:year="year = $event" @update:month="month = $event" />
     <n-space wrap style="margin-top:8px;">
       <n-tag v-for="d in exportStore.selectedDates" :key="d" closable @close="exportStore.removeDate(d)">{{ d }}</n-tag>
@@ -91,6 +108,19 @@ function slotsForDate(dateStr: string): TimeSlot[] {
   return settingsStore.timeSlots.filter(s => s.dayIndex === dayIdx).sort((a, b) => a.order - b.order)
 }
 
+function onBackgroundFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    exportStore.backgroundImage = reader.result as string
+  }
+  reader.onerror = () => {
+    message.error("背景图读取失败")
+  }
+  reader.readAsDataURL(file)
+}
+
 async function exportPlaylist() {
   const dates = exportStore.selectedDates
   if (dates.length === 0) return
@@ -114,29 +144,33 @@ async function generateImage(dates: string[]): Promise<string> {
   const isMobile = navigator.maxTouchPoints > 1 || window.innerWidth < 768
   const pixelRatio = isMobile ? 1 : 2
   const div = document.createElement("div")
-  div.style.cssText = "width:1000px;padding:32px;background:#fff;font-family:sans-serif;"
 
   let rawHtml = ""
-  if (songType.value === "dorm") {
-    rawHtml = buildDormTable(dates)
+  let bgColor = "#ffffff"
+  if (exportStore.templateType === "poster") {
+    rawHtml = buildPosterHTML(dates)
+    bgColor = exportStore.backgroundColor || "#1a1a1a"
+    div.style.cssText = `width:1000px;height:1250px;position:relative;overflow:hidden;background:${bgColor};`
   } else {
-    rawHtml = buildBroadcastTable(dates)
+    div.style.cssText = "width:1000px;padding:32px;background:#fff;font-family:sans-serif;"
+    rawHtml = songType.value === "dorm" ? buildDormTable(dates) : buildBroadcastTable(dates)
   }
 
   div.innerHTML = DOMPurify.sanitize(rawHtml, {
-    ALLOWED_TAGS: ["h2", "table", "thead", "tbody", "tr", "td", "th"],
-    ALLOWED_ATTR: ["style"],
+    ALLOWED_TAGS: exportStore.templateType === "poster"
+      ? ["div", "span", "svg", "path", "rect", "circle", "polygon", "style", "h2", "table", "thead", "tbody", "tr", "td", "th"]
+      : ["h2", "table", "thead", "tbody", "tr", "td", "th"],
+    ALLOWED_ATTR: ["style", "class", "viewBox", "fill", "stroke", "stroke-width", "cx", "cy", "r", "x", "y", "width", "height", "points", "rx", "d", "xmlns"],
   })
   document.body.appendChild(div)
   try {
-    return await domToPng(div, { scale: pixelRatio, backgroundColor: "#ffffff" })
+    return await domToPng(div, { scale: pixelRatio, backgroundColor: bgColor })
   } finally {
     document.body.removeChild(div)
   }
 }
 
 function buildDormTable(dates: string[]): string {
-  // Union of all slot times across selected dates, sorted by order of first appearance
   const timeOrder: Record<string, number> = {}
   for (const date of dates) {
     for (const slot of slotsForDate(date)) {
@@ -186,5 +220,129 @@ function buildBroadcastTable(dates: string[]): string {
       <thead><tr><th style="padding:8px;border:1px solid #ddd;background:#f0f0f0;">日期</th><th style="padding:8px;border:1px solid #ddd;background:#f0f0f0;">星期</th><th style="padding:8px;border:1px solid #ddd;background:#f0f0f0;">歌名</th><th style="padding:8px;border:1px solid #ddd;background:#f0f0f0;">备注</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`
+}
+
+function buildPosterHTML(dates: string[]): string {
+  const titleText = escapeHtml(songType.value === "dorm" ? t("export.dorm") : t("export.broadcast"))
+  const badgeText = "暑假限定"
+  const quoteText = "「人生南北多歧路 君向潇湘我向秦」"
+
+  const bgImage = exportStore.backgroundImage
+  const bgLayer = bgImage
+    ? `<div style="position:absolute;inset:0;background-image:url(${bgImage});background-size:cover;background-position:center;filter:blur(18px) brightness(0.75);transform:scale(1.08);"></div>`
+    : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#4a1c12 0%,#1a1a1a 50%,#0d0d0d 100%);"></div>`
+
+  const tableHtml = songType.value === "dorm"
+    ? buildDormPosterTable(dates)
+    : buildBroadcastPosterTable(dates)
+
+  return `<div style="position:absolute;inset:0;overflow:hidden;">
+    ${bgLayer}
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.18);"></div>
+  </div>
+  <div style="position:absolute;left:0;right:0;top:0;height:200px;display:flex;align-items:center;justify-content:center;gap:24px;padding:0 70px;box-sizing:border-box;">
+    <div style="width:45px;height:87.5px;flex-shrink:0;">
+      <svg viewBox="0 0 100 100" style="width:100%;height:100%;display:block;" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="50,5 65,25 35,25" fill="#ffffff"/>
+        <rect x="35" y="25" width="30" height="55" rx="5" fill="#ffffff"/>
+        <circle cx="50" cy="52.5" r="6" fill="#111111"/>
+        <path d="M28 38 Q12 52.5 28 67" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M18 31 Q-2 52.5 18 74" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M8 24 Q-16 52.5 8 81" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div style="font-family:'STSong','SimSun','Songti SC',serif;font-size:78px;font-weight:900;color:#ffffff;text-shadow:0 0.08em 0.15em rgba(0,0,0,0.35);white-space:nowrap;">${titleText}</div>
+    <div style="margin-left:auto;font-family:'Microsoft YaHei','PingFang SC','Hiragino Sans GB',sans-serif;font-size:28px;font-weight:600;color:#ffffff;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:0.15em;">${badgeText}</div>
+  </div>
+  <div style="position:absolute;left:90px;top:137.5px;width:820px;height:925px;background:rgba(0,0,0,0.72);border-radius:40px;box-shadow:0 12px 38px 0 rgba(0,0,0,0.45);overflow:hidden;display:flex;flex-direction:column;align-items:center;">
+    <div style="margin-top:28px;font-family:'STKaiti','KaiTi','STKaiti SC',serif;font-size:24px;color:#d7d7d7;text-align:center;letter-spacing:0.05em;">${quoteText}</div>
+    <div style="width:92%;height:1px;background:rgba(215,215,215,0.25);margin:18px 0;"></div>
+    ${tableHtml}
+  </div>`
+}
+
+function buildDormPosterTable(dates: string[]): string {
+  const timeOrder: Record<string, number> = {}
+  for (const date of dates) {
+    for (const slot of slotsForDate(date)) {
+      if (timeOrder[slot.time] === undefined) timeOrder[slot.time] = slot.order
+    }
+  }
+  const times = Object.keys(timeOrder).sort((a, b) => timeOrder[a] - timeOrder[b])
+
+  const headerCells = [
+    cellHtml("星期", true, true),
+    ...times.map(time => cellHtml(time, true, false))
+  ].join("")
+
+  const headerRow = rowHtml(headerCells, true)
+
+  const dataRows = dates.map(date => {
+    const daySlots = slotsForDate(date)
+    const slotMap: Record<string, Song | undefined> = {}
+    for (const slot of daySlots) {
+      slotMap[slot.time] = songsStore.dormSongs.find(s => s.date === date && s.timeSlotId === slot.id)
+    }
+    const cells = [
+      cellHtml(`${escapeHtml(weekdayName(dayIndexFromDate(date)))}`, false, true),
+      ...times.map(time => cellHtml(slotMap[time] ? escapeHtml(slotMap[time]!.title) : "-", false, false))
+    ].join("")
+    return rowHtml(cells, false)
+  }).join("")
+
+  return gridWrapperHtml(headerRow + dataRows, times.length + 1)
+}
+
+function buildBroadcastPosterTable(dates: string[]): string {
+  const allSongs: Song[] = []
+  for (const date of dates) {
+    allSongs.push(...songsStore.broadcastSongs.filter(s => s.date === date))
+  }
+  allSongs.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+
+  const headerCells = ["日期", "星期", "歌名", "备注"].map((h, i) => cellHtml(h, true, i === 0 || i === 1)).join("")
+  const headerRow = rowHtml(headerCells, true)
+
+  const dataRows = allSongs.map(s => {
+    const cells = [
+      cellHtml(escapeHtml(s.date), false, true),
+      cellHtml(escapeHtml(weekdayName(dayIndexFromDate(s.date))), false, true),
+      cellHtml(escapeHtml(s.title), false, false),
+      cellHtml(escapeHtml(s.remark), false, false)
+    ].join("")
+    return rowHtml(cells, false)
+  }).join("")
+
+  return gridWrapperHtml(headerRow + dataRows, 4)
+}
+
+function gridWrapperHtml(rowsHtml: string, colCount: number): string {
+  let columns = ""
+  if (colCount === 5) {
+    columns = "0.9fr repeat(4,2.25fr)"
+  } else if (colCount === 4) {
+    columns = "1.1fr 0.9fr 2.5fr 1.5fr"
+  } else {
+    columns = `repeat(${colCount},1fr)`
+  }
+
+  return `<div style="width:92%;height:820px;display:grid;grid-template-columns:${columns};grid-template-rows:9% repeat(auto-fill,13%);gap:1px;align-items:stretch;justify-items:stretch;background:rgba(215,215,215,0.65);font-family:'Microsoft YaHei','PingFang SC','Hiragino Sans GB',sans-serif;">
+    ${rowsHtml}
+  </div>`
+}
+
+function rowHtml(cellsHtml: string, isHeader: boolean): string {
+  return cellsHtml
+}
+
+function cellHtml(content: string, isHeader: boolean, narrow: boolean): string {
+  const fontFamily = isHeader
+    ? "'STHeiti','SimHei','Heiti SC','Microsoft YaHei',sans-serif"
+    : "'Microsoft YaHei','PingFang SC','Hiragino Sans GB',sans-serif"
+  const fontSize = isHeader ? "22px" : "20px"
+  const fontWeight = isHeader ? "700" : "600"
+  const color = "#ffffff"
+  const padding = narrow ? "0 4px" : "0 8px"
+  return `<div style="display:flex;justify-content:center;align-items:center;text-align:center;font-family:${fontFamily};font-size:${fontSize};font-weight:${fontWeight};color:${color};background:transparent;padding:${padding};line-height:1.35;box-sizing:border-box;min-height:100%;word-break:break-word;">${content}</div>`
 }
 </script>
