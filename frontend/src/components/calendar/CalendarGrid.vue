@@ -88,7 +88,7 @@ function onValueUpdate(ts: number) {
   }
 }
 
-function onPanelChange(info: { year: number; month: number; date: number }) {
+function onPanelChange(info: { year: number; month: number }) {
   emit("update:year", info.year)
   emit("update:month", info.month)
 }

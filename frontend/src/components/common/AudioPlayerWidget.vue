@@ -7,7 +7,7 @@
     @click="player.show()"
     title="音频播放器"
   >
-    <template #icon>🎵</template>
+    🎵
   </n-float-button>
 
   <!-- 播放器卡片 -->

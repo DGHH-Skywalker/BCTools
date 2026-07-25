@@ -23,8 +23,6 @@ declare module 'vue' {
     NEllipsis: typeof import('naive-ui')['NEllipsis']
     NEmpty: typeof import('naive-ui')['NEmpty']
     NFloatButton: typeof import('naive-ui')['NFloatButton']
-    NGrid: typeof import('naive-ui')['NGrid']
-    NGridItem: typeof import('naive-ui')['NGridItem']
     NH1: typeof import('naive-ui')['NH1']
     NH2: typeof import('naive-ui')['NH2']
     NH3: typeof import('naive-ui')['NH3']
