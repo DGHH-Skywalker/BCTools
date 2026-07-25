@@ -1,0 +1,36 @@
+# 依赖
+node_modules/
+
+# 构建产物
+frontend/dist/
+backend/embed/dist/
+backend/broadcast-tool.exe
+broadcast-tool.exe
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+build_stdout.txt
+build_stderr.txt
+build*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# 日志
+*.log
+
+# 临时文件
+*.tmp
+temp/
+
+# Auto-generated
+*.syso
+icon.ico
+build_stdout.txt
+build_stderr.txt
+build*.log
