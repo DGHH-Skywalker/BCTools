@@ -70,7 +70,7 @@
     "noValidData": "No valid data found"
   },
   "broadcast": {
-    "title": "Title",
+    "title": "Broadcast Playlist Management",
     "addSong": "Add Song",
     "date": "Date",
     "weekday": "Weekday",

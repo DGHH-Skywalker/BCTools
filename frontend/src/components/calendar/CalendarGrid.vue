@@ -9,7 +9,6 @@
     >
       <template #default="{ year: y, month: m, date: d }">
         <div class="calendar-cell" :class="{ selected: isSelected(y, m, d), 'has-songs': cellInfo(y, m, d).filledSlots > 0 }">
-          <div class="day-num">{{ d }}</div>
           <div v-if="cellInfo(y, m, d).totalSlots > 0" class="slot-badge" :class="cellInfo(y, m, d).filledSlots === cellInfo(y, m, d).totalSlots ? 'full' : 'partial'">
             {{ cellInfo(y, m, d).filledSlots }}/{{ cellInfo(y, m, d).totalSlots }}
           </div>
@@ -97,7 +96,8 @@ function onPanelChange(info: { year: number; month: number; date: number }) {
 
 <style scoped>
 .calendar-wrapper {
-  max-width: 520px;
+  width: 100%;
+  max-width: 900px;
   margin: 0 auto;
 }
 
@@ -107,20 +107,25 @@ function onPanelChange(info: { year: number; month: number; date: number }) {
 }
 
 .calendar-wrapper :deep(.n-calendar-date) {
-  min-height: 56px;
+  min-height: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.calendar-wrapper :deep(.n-calendar-date__date) {
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .calendar-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-height: 48px;
+  justify-content: flex-end;
+  min-height: 64px;
   width: 100%;
-  padding: 2px;
+  padding: 4px;
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.15s;
@@ -139,17 +144,12 @@ function onPanelChange(info: { year: number; month: number; date: number }) {
   background: #f0f9ff;
 }
 
-.day-num {
-  font-size: 13px;
-  line-height: 1.2;
-}
-
 .slot-badge {
-  margin-top: 1px;
-  font-size: 10px;
-  padding: 0 3px;
-  border-radius: 8px;
-  line-height: 1.3;
+  margin-top: 2px;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  line-height: 1.4;
 }
 
 .slot-badge.partial {
@@ -167,10 +167,10 @@ function onPanelChange(info: { year: number; month: number; date: number }) {
     max-width: 100%;
   }
   .calendar-wrapper :deep(.n-calendar-date) {
-    min-height: 48px;
+    min-height: 56px;
   }
   .calendar-cell {
-    min-height: 42px;
+    min-height: 48px;
   }
 }
 </style>

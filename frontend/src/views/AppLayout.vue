@@ -1,17 +1,21 @@
 <template>
-  <n-layout style="min-height:100vh;" has-sider>
+  <n-layout style="height:100vh;" has-sider>
     <n-layout-sider bordered :collapsed-width="64" :width="200" show-trigger="bar" collapse-mode="width" :collapsed="collapsed" @collapse="collapsed=true" @expand="collapsed=false">
       <n-h3 v-if="!collapsed" style="padding:12px 16px;margin:0;white-space:nowrap;font-style:normal;">{{ t("app.shortTitle") }}</n-h3>
       <n-menu :collapsed="collapsed" :collapsed-width="64" :collapsed-icon-size="22" :value="activeKey" :options="menuOptions" @update:value="onMenuChange" />
     </n-layout-sider>
-    <n-layout>
-      <n-layout-header v-if="config.languageSwitchEnabled" style="padding:8px 16px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;justify-content:flex-end;align-items:center;">
+    <n-layout style="height:100vh;">
+      <n-layout-header v-if="config.languageSwitchEnabled" style="padding:8px 16px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;justify-content:flex-end;align-items:center;height:49px;">
         <n-button-group size="small">
           <n-button :type="currentLocale==='zh-CN'?'primary':'default'" @click="switchLang('zh-CN')">中</n-button>
           <n-button :type="currentLocale==='en'?'primary':'default'" @click="switchLang('en')">EN</n-button>
         </n-button-group>
       </n-layout-header>
-      <n-layout-content style="padding:0;">
+      <n-layout-content
+        :native-scrollbar="true"
+        :scrollbar-props="{ trigger: 'none' }"
+        :style="{ padding: 0, height: config.languageSwitchEnabled ? 'calc(100vh - 49px)' : '100vh' }"
+      >
         <router-view />
       </n-layout-content>
     </n-layout>

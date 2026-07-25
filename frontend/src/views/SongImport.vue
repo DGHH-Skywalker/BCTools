@@ -52,39 +52,42 @@
         {{ t("songImport.progress", { done: doneCount, total: processingFiles.length }) }}
       </n-p>
 
-      <n-grid :cols="3" :x-gap="8" :y-gap="8" v-if="processingFiles.length > 0">
-        <n-grid-item v-for="file in processingFiles" :key="file.id">
+      <n-list v-if="processingFiles.length > 0" style="margin-top:12px;">
+        <n-list-item v-for="file in processingFiles" :key="file.id">
           <n-card :class="['conv-card', file.status]" size="small">
-            <n-space vertical>
-              <n-space align="center">
-                <n-tag :type="statusTagType(file.status)" size="small">{{ file.fileType }}</n-tag>
-                <n-ellipsis style="max-width:120px;">{{ file.fileName }}</n-ellipsis>
+            <n-space vertical style="width:100%;">
+              <n-space align="center" justify="space-between" style="width:100%;">
+                <n-space align="center">
+                  <n-tag :type="statusTagType(file.status)" size="small">{{ file.fileType }}</n-tag>
+                  <n-ellipsis style="max-width:300px;">{{ file.fileName }}</n-ellipsis>
+                </n-space>
+                <n-button v-if="file.status==='error'" size="small" @click="retryFile(file)">{{ t("songImport.retry") }}</n-button>
               </n-space>
+
               <n-spin v-if="file.status==='converting'" size="small">
                 <template #description>处理中...</template>
               </n-spin>
-              <n-space v-if="file.status==='done'" vertical>
-                <n-space align="center">
-                  <n-input :value="file.songTitle" size="small" style="width:200px;" @update:value="(v: string) => file.songTitle=v" @blur="saveMetadata(file)" :placeholder="t('songImport.editTitle')" />
-                  <n-select
-                    v-if="file.songId"
-                    size="small"
-                    :value="file.timeSlotId"
-                    :placeholder="t('songImport.slotPlaceholder')"
-                    :options="slotOptions"
-                    :render-label="renderSlotLabel"
-                    @update:value="(v: string | null) => assignSlot(file, v as string)"
-                    style="width:100%;"
-                  />
-                  <n-text v-if="file.timeSlotId" type="success" depth="3">{{ t("songImport.assigned") }}</n-text>
-                </n-space>
+
+              <n-space v-if="file.status==='done'" vertical style="width:100%;">
+                <n-input :value="file.songTitle" size="small" style="width:100%;" @update:value="(v: string) => file.songTitle=v" @blur="saveMetadata(file)" :placeholder="t('songImport.editTitle')" />
+                <n-select
+                  v-if="file.songId"
+                  size="small"
+                  :value="file.timeSlotId"
+                  :placeholder="t('songImport.slotPlaceholder')"
+                  :options="slotOptions"
+                  :render-label="renderSlotLabel"
+                  @update:value="(v: string | null) => assignSlot(file, v as string)"
+                  style="width:100%;"
+                />
+                <n-text v-if="file.timeSlotId" type="success" depth="3">{{ t("songImport.assigned") }}</n-text>
               </n-space>
+
               <n-text v-if="file.status==='error'" type="error" depth="3">{{ file.error }}</n-text>
-              <n-button v-if="file.status==='error'" size="small" @click="retryFile(file)">{{ t("songImport.retry") }}</n-button>
             </n-space>
           </n-card>
-        </n-grid-item>
-      </n-grid>
+        </n-list-item>
+      </n-list>
 
       <n-empty v-if="processingFiles.length === 0" :description="t('songImport.empty')" style="margin-top:40px;" />
     </template>

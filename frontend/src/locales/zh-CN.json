@@ -73,7 +73,7 @@
     "noValidData": "未发现有效数据"
   },
   "broadcast": {
-    "title": "歌名",
+    "title": "播音歌单管理",
     "addSong": "添加歌曲",
     "date": "日期",
     "weekday": "星期",
