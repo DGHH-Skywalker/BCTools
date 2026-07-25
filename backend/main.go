@@ -220,7 +220,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("BroadcastTool v1.0.0 已启动: http://localhost:%d", port)
+		log.Printf("BroadcastTool v5.0.0.1 已启动: http://localhost:%d", port)
 		log.Printf("局域网访问: http://%s:%d", getLocalIP(), port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)

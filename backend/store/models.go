@@ -23,7 +23,7 @@ func DefaultSettings() models.Settings {
 		AdminPasswordHash:         "",
 		AdminPasswordHint:         "",
 		Locale:                    "zh-CN",
-		Version:                   "1.0.0",
+		Version:                   "5.0.0.1",
 		DownloadURL:               "",
 	}
 }

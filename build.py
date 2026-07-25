@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Build Script for BroadcastTool v2.0
+"""Build Script for BroadcastTool v5.0.0.1
 
 一键构建前后端：python build.py
 
@@ -244,7 +244,7 @@ def main():
     bar = "=" * 60
     print(f"{C.CYN}{bar}{C.X}")
     print(f"{C.CYN}  广播站歌单与音频整理工具 - 一键构建{C.X}")
-    print(f"{C.CYN}  BroadcastTool Build Script v2.0{C.X}")
+    print(f"{C.CYN}  BroadcastTool Build Script v5.0.0.1{C.X}")
     print(f"{C.CYN}  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{C.X}")
     print(f"{C.CYN}{bar}{C.X}\n")
 
