@@ -135,6 +135,7 @@
     "backupSuccess": "Backup successful",
     "backupFailed": "Backup failed: {reason}",
     "advanced": "Advanced Settings",
+    "guide": "User Guide",
     "advancedPassword": "Enter advanced settings password",
     "passwordHint": "Password hint: {hint}",
     "language": "Language"

@@ -6,6 +6,7 @@
         <n-space align="center">
           <n-text>{{ t("settings.version") }}: {{ settingsStore.version }}</n-text>
           <n-button size="small" @click="checkUpdate">{{ t("settings.checkUpdate") }}</n-button>
+          <n-button size="small" @click="showGuideModal = true">{{ t("settings.guide") }}</n-button>
         </n-space>
         <n-space align="center" v-if="config.languageSwitchEnabled">
           <n-text>{{ t("settings.language") }}:</n-text>
@@ -29,6 +30,21 @@
     <n-card style="margin-bottom:16px;">
       <n-button @click="showPasswordModal = true">{{ t("settings.advanced") }}</n-button>
     </n-card>
+    <n-modal
+      v-model:show="showGuideModal"
+      title="软件指南"
+      preset="card"
+      :style="{ width: '80%', maxWidth: '900px' }"
+      :content-style="{ padding: 0 }"
+    >
+      <n-scrollbar style="max-height: 70vh; padding: 24px;">
+        <n-p>这是软件指南的测试内容第 1 行。</n-p>
+        <n-p>这是软件指南的测试内容第 2 行。</n-p>
+        <n-p>这是软件指南的测试内容第 3 行。</n-p>
+        <n-p>后续将在此补充完整的使用说明、常见问题与操作步骤。</n-p>
+      </n-scrollbar>
+    </n-modal>
+
     <n-modal v-model:show="showPasswordModal" :title="t('settings.advanced')" preset="card" style="width:400px;">
       <n-input v-model:value="password" type="password" :placeholder="t('settings.advancedPassword')" @keyup.enter="verifyPwd" />
       <n-p v-if="pwdError">{{ t("settings.passwordHint", { hint: pwdHint }) }}</n-p>
@@ -55,6 +71,7 @@ const settingsStore = useSettingsStore()
 const { config } = useAppConfig()
 const router = useRouter()
 const message = useMessage()
+const showGuideModal = ref(false)
 const showPasswordModal = ref(false)
 const password = ref("")
 const pwdError = ref(false)

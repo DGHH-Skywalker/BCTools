@@ -138,6 +138,7 @@
     "backupSuccess": "备份成功",
     "backupFailed": "备份失败：{reason}",
     "advanced": "高级设置",
+    "guide": "软件指南",
     "advancedPassword": "请输入高级设置密码",
     "passwordHint": "密码提示：{hint}",
     "language": "界面语言"
