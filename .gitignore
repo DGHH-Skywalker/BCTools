@@ -8,6 +8,11 @@ backend/broadcast-tool.exe
 broadcast-tool.exe
 dist/
 
+# 可执行文件与压缩包
+*.exe
+*.zip
+*.7z
+
 # Python
 __pycache__/
 *.pyc
