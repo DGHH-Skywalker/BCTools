@@ -209,8 +209,9 @@ func main() {
 		})
 	}
 
-	// 7. Find available port
-	port := findAvailablePort(1743)
+	// 7. Ensure single instance on fixed port 1743
+	const port = 1743
+	ensurePortAvailable(port)
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 
 	server := &http.Server{
@@ -272,15 +273,49 @@ func isLocalhost(host string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
-func findAvailablePort(start int) int {
-	for port := start; port <= start+6; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
-		if err == nil {
-			ln.Close()
-			return port
+func ensurePortAvailable(port int) {
+	addr := fmt.Sprintf("0.0.0.0:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		ln.Close()
+		return
+	}
+
+	log.Printf("Port %d is already in use; killing the existing occupier to ensure single instance.", port)
+	killPortOccupier(port)
+
+	// Wait briefly and retry.
+	time.Sleep(500 * time.Millisecond)
+	ln2, err2 := net.Listen("tcp", addr)
+	if err2 == nil {
+		ln2.Close()
+		return
+	}
+	log.Fatalf("Port %d is still in use after cleanup: %v", port, err2)
+}
+
+func killPortOccupier(port int) {
+	// netstat -ano lines look like:
+	//   TCP    0.0.0.0:1743    0.0.0.0:0    LISTENING    12345
+	out, err := exec.Command("cmd", "/c", fmt.Sprintf("netstat -ano | findstr :%d", port)).Output()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		localAddr := fields[1]
+		pid := fields[4]
+		if strings.HasSuffix(localAddr, fmt.Sprintf(":%d", port)) {
+			if err := exec.Command("taskkill", "/F", "/PID", pid).Run(); err != nil {
+				log.Printf("Failed to kill PID %s on port %d: %v", pid, port, err)
+			} else {
+				log.Printf("Killed PID %s occupying port %d", pid, port)
+			}
 		}
 	}
-	return start
 }
 
 func getLocalIP() string {
