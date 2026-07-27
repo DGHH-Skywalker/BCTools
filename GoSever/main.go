@@ -43,6 +43,7 @@ func main() {
 	for _, dir := range []string{
 		appDataDir,
 		paths.GetTempDir(appDataDir),
+		paths.GetSongsDir(appDataDir),
 		paths.GetSnapshotsDir(appDataDir),
 		paths.GetLogsDir(appDataDir),
 		paths.GetBinDir(appDataDir),
@@ -119,15 +120,21 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Shutdown endpoint: save data and exit
+	// Shutdown endpoint: only allow localhost to prevent accidental remote shutdown
 	r.Post("/api/shutdown", func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil || !isLocalhost(host) {
+			log.Printf("Shutdown request rejected from %s", r.RemoteAddr)
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
 		log.Println("Shutdown requested via API")
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"shutting_down"}`))
-		go func() {
+		safeGo("shutdown", func() {
 			time.Sleep(200 * time.Millisecond)
 			os.Exit(0)
-		}()
+		})
 	})
 
 	// API routes
@@ -219,22 +226,22 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
-		log.Printf("BroadcastTool v5.0.0.1 已启动: http://localhost:%d", port)
+	safeGo("server", func() {
+		log.Printf("BroadcastTool v5.5.0.0 已启动: http://localhost:%d", port)
 		log.Printf("局域网访问: http://%s:%d", getLocalIP(), port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
-	}()
+	})
 
 	// 9. Auto-open browser
-	go func() {
+	safeGo("browser", func() {
 		time.Sleep(500 * time.Millisecond)
 		url := fmt.Sprintf("http://localhost:%d/", port)
 		if err := openBrowser(url); err != nil {
 			log.Printf("Failed to open browser: %v", err)
 		}
-	}()
+	})
 
 	<-quit
 	log.Println("Shutting down...")
@@ -242,6 +249,27 @@ func main() {
 	defer cancel()
 	server.Shutdown(ctx)
 	log.Println("Server stopped")
+}
+
+// safeGo runs a goroutine and recovers from panics to avoid crashing the whole process.
+func safeGo(name string, fn func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("goroutine %s recovered from panic: %v", name, r)
+			}
+		}()
+		fn()
+	}()
+}
+
+// isLocalhost reports whether host is a loopback address.
+func isLocalhost(host string) bool {
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 func findAvailablePort(start int) int {

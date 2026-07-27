@@ -216,7 +216,7 @@ interface Song {
   "silentPlaceholderDuration": 30,
   "adminPasswordHint": "",
   "locale": "zh-CN",
-  "version": "5.0.0.1",
+  "version": "5.5.0.0",
   "downloadUrl": ""
 }
 ```
@@ -285,7 +285,7 @@ interface Song {
 ```json
 {
   "hasUpdate": false,
-  "latestVersion": "5.0.0.1",
+  "latestVersion": "5.5.0.0",
   "downloadUrl": ""
 }
 ```

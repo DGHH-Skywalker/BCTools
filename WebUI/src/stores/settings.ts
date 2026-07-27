@@ -11,7 +11,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const autoBackupPath = ref("")
   const autoBackupEnabled = ref(false)
   const silentPlaceholderDuration = ref(30)
-  const version = ref("5.0.0.1")
+  const version = ref("5.5.0.0")
   const downloadUrl = ref("")
   const adminPasswordHint = ref("")
   const locale = ref("zh-CN")

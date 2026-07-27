@@ -59,7 +59,7 @@
 ### 前端
 
 ```bash
-cd frontend
+cd WebUI
 npm install
 npm run type-check
 npm run build
@@ -68,7 +68,7 @@ npm run build
 ### 后端
 
 ```bash
-cd backend
+cd GoSever
 go mod tidy
 go vet ./...
 go test ./...
@@ -79,16 +79,16 @@ go build -ldflags="-s -w" -o broadcast-tool.exe .
 ### 完整打包
 
 ```bash
-cd frontend && npm run build
+cd WebUI && npm run build
 cd ..
-rm -rf backend/embed/dist
-mkdir -p backend/embed/dist
-cp -r frontend/dist/* backend/embed/dist/
-cd backend
+rm -rf GoSever/embed/dist
+mkdir -p GoSever/embed/dist
+cp -r WebUI/dist/* GoSever/embed/dist/
+cd GoSever
 go build -ldflags="-s -w" -o broadcast-tool.exe .
 cd ..
 mkdir -p dist
-cp backend/broadcast-tool.exe dist/
+cp GoSever/broadcast-tool.exe dist/
 # 确保 dist/ 中已包含 ffmpeg.exe 与 ffprobe.exe
 ```
 
@@ -98,7 +98,7 @@ cp backend/broadcast-tool.exe dist/
 
 ```text
 .
-├── backend/              Go 后端
+├── GoSever/              Go 后端
 │   ├── converter/        音频转换、NCM 解密、静音生成
 │   ├── embed/dist/       嵌入的前端构建产物
 │   ├── handlers/         HTTP 接口处理
@@ -110,7 +110,7 @@ cp backend/broadcast-tool.exe dist/
 │   ├── store/            数据持久化与快照
 │   ├── validation/       参数校验
 │   └── main.go           程序入口
-├── frontend/             Vue 3 + TypeScript 前端
+├── WebUI/                Vue 3 + TypeScript 前端
 │   ├── src/
 │   │   ├── api/          接口请求
 │   │   ├── components/   组件
@@ -169,6 +169,18 @@ A：后端已对解密流程设置 60 秒超时保护，超时会返回错误；
 
 **Q：播音歌单输入框无法编辑？**  
 A：当前版本已改为本地编辑 + 失焦自动保存，若仍有问题请刷新页面。
+
+---
+
+## 版本历史
+
+### v5.5.0.0（当前）
+
+- 所有页面标题统一为“江西拙楷 + 主题色”风格。
+- 侧边栏菜单重命名：`歌曲导入` → `宿舍点歌`，`宿舍点歌` → `宿舍歌单`。
+- 换卡工具改为按周多选卡片，复用歌单导出“简约模式”表格预览，并从缓存目录复制重命名文件到 SD 卡目录。
+- 新增 `PageTitle` 组件与 `playlistTable` 工具，提升代码复用。
+- 全项目版本号统一升级为 `v5.5.0.0`。
 
 ---
 

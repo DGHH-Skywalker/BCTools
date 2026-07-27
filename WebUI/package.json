@@ -1,6 +1,6 @@
 {
   "name": "broadcast-tool-frontend",
-  "version": "5.0.0.1",
+  "version": "5.5.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@icon-park/vue-next": "^1.4.2",
     "axios": "^1.6.0",
     "dayjs": "^1.11.0",
     "dompurify": "^3.0.0",

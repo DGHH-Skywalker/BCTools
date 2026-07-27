@@ -2,15 +2,15 @@
   "FixedFileInfo": {
     "FileVersion": {
       "Major": 5,
-      "Minor": 0,
+      "Minor": 5,
       "Patch": 0,
-      "Build": 1
+      "Build": 0
     },
     "ProductVersion": {
       "Major": 5,
-      "Minor": 0,
+      "Minor": 5,
       "Patch": 0,
-      "Build": 1
+      "Build": 0
     },
     "FileFlagsMask": "3f",
     "FileFlags ": "00",
@@ -22,12 +22,12 @@
     "Comments": "BroadcastTool",
     "CompanyName": "Egansama",
     "FileDescription": "广播站歌单工具",
-    "FileVersion": "5.0.0.1",
+    "FileVersion": "5.5.0.0",
     "InternalName": "broadcast-tool",
     "LegalCopyright": "(c) 2026 Egansama",
     "OriginalFilename": "broadcast-tool.exe",
     "ProductName": "广播站歌单工具",
-    "ProductVersion": "5.0.0.1"
+    "ProductVersion": "5.5.0.0"
   },
   "VarFileInfo": {
     "Translation": {
