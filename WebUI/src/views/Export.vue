@@ -13,7 +13,7 @@
     <n-space align="center" justify="space-between" wrap style="margin-bottom:12px;">
       <n-space align="center" wrap>
         <n-text strong>{{ t("export.sourceTitle") }}</n-text>
-        <n-select v-model:value="selectedYear" :options="yearOptions" virtual-scroll @scroll="onYearScroll" style="width:120px;" />
+        <YearSelect v-model:value="selectedYear" />
       </n-space>
       <n-space align="center" wrap>
         <n-text strong>{{ t("export.targetTitle") }}</n-text>
@@ -176,6 +176,7 @@ import { useExportStore } from "../stores/export"
 import { useAppConfig } from "../composables/useAppConfig"
 import WeekTransferPanel from "../components/export/WeekTransferPanel.vue"
 import PageTitle from "../components/common/PageTitle.vue"
+import YearSelect from "../components/common/YearSelect.vue"
 import { buildDormTableHTML } from "../utils/playlistTable"
 
 interface DayOption {
@@ -207,23 +208,6 @@ const showAdvancedDrawer = ref(false)
 
 const fontBase64Cache: Record<string, string | null> = {}
 const imageBase64Cache: Record<string, string | null> = {}
-
-const yearOptions = ref<{ label: string; value: number }[]>([])
-const yearEnd = ref(2030)
-function loadYears() {
-  const years: { label: string; value: number }[] = []
-  for (let y = 2026; y <= yearEnd.value; y++) years.push({ label: `${y}`, value: y })
-  yearOptions.value = years
-}
-function onYearScroll(e: Event) {
-  const target = e.target as HTMLElement
-  if (target.scrollTop + target.clientHeight >= target.scrollHeight - 10) {
-    if (yearEnd.value < 2150) {
-      yearEnd.value = Math.min(2150, yearEnd.value + 10)
-      loadYears()
-    }
-  }
-}
 
 function canExport(type: SongType) {
   if (exportStore.selectedDates.length === 0) return false
@@ -262,7 +246,6 @@ function switchRailStyle({ checked }: { checked: boolean }) {
 
 onMounted(async () => {
   await Promise.all([songsStore.fetchSongs("dorm"), songsStore.fetchSongs("broadcast"), settingsStore.fetchSettings()])
-  loadYears()
   updateDrawerWidth()
   window.addEventListener("resize", updateDrawerWidth)
   scrollToCurrentWeek()

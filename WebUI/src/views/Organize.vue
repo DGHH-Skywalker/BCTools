@@ -22,7 +22,7 @@
 
         <n-space align="center" wrap>
           <n-text>{{ t("organize.year") }}:</n-text>
-          <n-select v-model:value="selectedYear" :options="yearOptions" style="width:120px;" />
+          <YearSelect v-model:value="selectedYear" />
         </n-space>
 
         <n-space vertical style="width:100%;">
@@ -66,6 +66,7 @@ import { useMessage } from "naive-ui"
 import dayjs from "dayjs"
 import isoWeek from "dayjs/plugin/isoWeek"
 import PageTitle from "../components/common/PageTitle.vue"
+import YearSelect from "../components/common/YearSelect.vue"
 import { buildDormTableHTML } from "../utils/playlistTable"
 import type { TimeSlot } from "../api/types"
 
@@ -99,15 +100,6 @@ const copyingWeek = ref<number | null>(null)
 const showConfirm = ref(false)
 const existingFiles = ref<string[]>([])
 const pendingWeek = ref<number | null>(null)
-
-const yearOptions = computed(() => {
-  const current = dayjs().year()
-  const years: { label: string; value: number }[] = []
-  for (let y = current - 2; y <= current + 5; y++) {
-    years.push({ label: `${y}`, value: y })
-  }
-  return years
-})
 
 interface WeekOption {
   label: string
