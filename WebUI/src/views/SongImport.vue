@@ -1,11 +1,13 @@
 <template>
   <div style="padding:16px;max-width:1200px;margin:0 auto;">
-    <n-space align="center" style="margin-bottom:16px;">
-      <n-button text @click="showCalendar=true" v-if="!showCalendar">
-        ← {{ t("songImport.backToCalendar") }}
-      </n-button>
-      <n-h2 style="margin:0;">{{ pageTitle }}</n-h2>
-    </n-space>
+    <PageTitle :title="pageTitle">
+      <template #prefix>
+        <n-button text @click="showCalendar=true" v-if="!showCalendar">
+          <template #icon><Left theme="outline" :size="14" :strokeWidth="3" /></template>
+          {{ t("songImport.backToCalendar") }}
+        </n-button>
+      </template>
+    </PageTitle>
 
     <template v-if="showCalendar">
       <CalendarGrid
@@ -13,6 +15,7 @@
         :month="month"
         :songs-map="songsMap"
         selection-mode="single"
+        size="mini"
         @date-click="onDateClick"
         @update:year="year = $event"
         @update:month="month = $event"
@@ -38,11 +41,11 @@
       </n-card>
 
       <n-card style="margin-bottom:16px;" :title="t('songImport.uploadTitle')">
-        <n-upload :default-upload="false" accept=".ncm,.mp3,.flac,.wav,.mp4" multiple @change="handleFiles">
+        <n-upload :default-upload="false" accept=".ncm,.mp3,.mp4,.m4a,.flac,.wav,.aac,.ogg,.wma,.ape" multiple @change="handleFiles">
           <n-upload-dragger>
             <div style="padding:24px;text-align:center;">
               <n-h3>{{ t("songImport.dropFiles") }}</n-h3>
-              <n-p depth="3">{{ t("songImport.formatHint") }}</n-p>
+              <n-p depth="3">支持 ncm / mp3 / m4a / flac / wav / aac / ogg / wma / ape / mp4</n-p>
             </div>
           </n-upload-dragger>
         </n-upload>
@@ -52,42 +55,42 @@
         {{ t("songImport.progress", { done: doneCount, total: processingFiles.length }) }}
       </n-p>
 
-      <n-list v-if="processingFiles.length > 0" style="margin-top:12px;">
-        <n-list-item v-for="file in processingFiles" :key="file.id">
-          <n-card :class="['conv-card', file.status]" size="small">
-            <n-space vertical style="width:100%;">
-              <n-space align="center" justify="space-between" style="width:100%;">
-                <n-space align="center">
-                  <n-tag :type="statusTagType(file.status)" size="small">{{ file.fileType }}</n-tag>
-                  <n-ellipsis style="max-width:300px;">{{ file.fileName }}</n-ellipsis>
-                </n-space>
-                <n-button v-if="file.status==='error'" size="small" @click="retryFile(file)">{{ t("songImport.retry") }}</n-button>
+      <div v-if="processingFiles.length > 0" class="import-grid">
+        <n-card v-for="file in processingFiles" :key="file.id" :class="['conv-card', file.status]" size="small">
+          <n-space vertical style="width:100%;">
+            <n-space align="center" justify="space-between" style="width:100%;">
+              <n-space align="center" style="min-width:0;flex:1;">
+                <n-tag :type="statusTagType(file.status)" size="small" style="flex-shrink:0;">{{ file.fileType }}</n-tag>
+                <n-ellipsis style="min-width:0;flex:1;" :tooltip="{ disabled: false }">
+                  <span>{{ file.fileName }}</span>
+                </n-ellipsis>
               </n-space>
-
-              <n-spin v-if="file.status==='converting'" size="small">
-                <template #description>处理中...</template>
-              </n-spin>
-
-              <n-space v-if="file.status==='done'" vertical style="width:100%;">
-                <n-input :value="file.songTitle" size="small" style="width:100%;" @update:value="(v: string) => file.songTitle=v" @blur="saveMetadata(file)" :placeholder="t('songImport.editTitle')" />
-                <n-select
-                  v-if="file.songId"
-                  size="small"
-                  :value="file.timeSlotId"
-                  :placeholder="t('songImport.slotPlaceholder')"
-                  :options="slotOptions"
-                  :render-label="renderSlotLabel"
-                  @update:value="(v: string | null) => assignSlot(file, v as string)"
-                  style="width:100%;"
-                />
-                <n-text v-if="file.timeSlotId" type="success" depth="3">{{ t("songImport.assigned") }}</n-text>
-              </n-space>
-
-              <n-text v-if="file.status==='error'" type="error" depth="3">{{ file.error }}</n-text>
+              <n-button v-if="file.status==='error'" size="small" @click="retryFile(file)" style="flex-shrink:0;">{{ t("songImport.retry") }}</n-button>
             </n-space>
-          </n-card>
-        </n-list-item>
-      </n-list>
+
+            <n-spin v-if="file.status==='converting'" size="small">
+              <template #description>处理中...</template>
+            </n-spin>
+
+            <n-space v-if="file.status==='done'" vertical style="width:100%;">
+              <n-input :value="file.songTitle" size="small" style="width:100%;" @update:value="(v: string) => updateTitle(file, v)" @blur="saveMetadata(file)" :placeholder="t('songImport.editTitle')" />
+              <n-select
+                v-if="file.songId"
+                size="small"
+                :value="file.timeSlotId"
+                :placeholder="t('songImport.slotPlaceholder')"
+                :options="slotOptions"
+                :render-label="renderSlotLabel"
+                @update:value="(v: string | null) => assignSlot(file, v as string)"
+                style="width:100%;"
+              />
+              <n-text v-if="file.timeSlotId" type="success" depth="3">{{ t("songImport.assigned") }}</n-text>
+            </n-space>
+
+            <n-text v-if="file.status==='error'" type="error" depth="3">{{ file.error }}</n-text>
+          </n-space>
+        </n-card>
+      </div>
 
       <n-empty v-if="processingFiles.length === 0" :description="t('songImport.empty')" style="margin-top:40px;" />
     </template>
@@ -99,9 +102,11 @@ import { ref, computed, onMounted, reactive, h } from "vue"
 import { useI18n } from "../i18n"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
+import { Left } from "@icon-park/vue-next"
 import { processFile, stashFile } from "../api/files"
 import { createSong, updateSong } from "../api/songs"
 import CalendarGrid from "../components/calendar/CalendarGrid.vue"
+import PageTitle from "../components/common/PageTitle.vue"
 import { useAudioPlayer } from "../composables/useAudioPlayer"
 import dayjs from "dayjs"
 import type { TimeSlot } from "../api/types"
@@ -135,7 +140,7 @@ let running = 0
 
 const pageTitle = computed(() => {
   if (showCalendar.value) return t("songImport.selectDate")
-  return `${t("songImport.title")} - ${selectedDate.value}`
+  return `${t("songImport.dormSelect")} - ${selectedDate.value}`
 })
 
 const doneCount = computed(() => processingFiles.filter(f => f.status === "done" || f.status === "error").length)
@@ -183,7 +188,7 @@ const songsMap = computed(() => {
 function slotName(slotId: string | null) {
   if (!slotId) return ""
   const slot = settingsStore.timeSlots.find(s => s.id === slotId)
-  return slot ? slot.time : ""
+  return slot ? slot.time : "未知时段"
 }
 
 function renderSlotLabel(option: SelectOption) {
@@ -211,6 +216,7 @@ function onDateClick(date: string) {
   if (!date) return
   selectedDate.value = date
   showCalendar.value = false
+  processingFiles.length = 0
 }
 
 function extractFiles(fileList: any[]): File[] {
@@ -297,10 +303,24 @@ async function processItem(item: ProcessingFile) {
   }
 }
 
+function updateTitle(item: ProcessingFile, v: string) {
+  item.songTitle = v
+  if (item.songId) {
+    const storeSong = songsStore.dormSongs.find(s => s.id === item.songId)
+    if (storeSong) {
+      storeSong.title = v
+    }
+  }
+}
+
 async function saveMetadata(item: ProcessingFile) {
   if (!item.songId) return
   try {
     await updateSong(item.songId, { title: item.songTitle })
+    const storeSong = songsStore.dormSongs.find(s => s.id === item.songId)
+    if (storeSong) {
+      storeSong.title = item.songTitle
+    }
   } catch (err: any) {
     console.error("保存元数据失败", err)
   }
@@ -326,4 +346,29 @@ function retryFile(item: ProcessingFile) {
 <style scoped>
 .conv-card { margin-bottom:4px; }
 .conv-card.error { border-color: #e74c3c; }
+
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1024px) {
+  .import-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .import-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .import-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 </style>

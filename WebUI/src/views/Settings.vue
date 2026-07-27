@@ -1,6 +1,6 @@
 <template>
   <div style="padding:24px;max-width:800px;margin:0 auto;">
-    <n-h2>{{ t("settings.title") }}</n-h2>
+    <PageTitle :title="t('settings.title')" />
     <n-card style="margin-bottom:16px;">
       <n-space vertical>
         <n-space align="center">
@@ -27,9 +27,6 @@
         <n-button @click="backupNow">{{ t("settings.backupNow") }}</n-button>
       </n-space>
     </n-card>
-    <n-card style="margin-bottom:16px;">
-      <n-button @click="showPasswordModal = true">{{ t("settings.advanced") }}</n-button>
-    </n-card>
     <n-modal
       v-model:show="showGuideModal"
       title="软件指南"
@@ -44,41 +41,29 @@
         <n-p>后续将在此补充完整的使用说明、常见问题与操作步骤。</n-p>
       </n-scrollbar>
     </n-modal>
-
-    <n-modal v-model:show="showPasswordModal" :title="t('settings.advanced')" preset="card" style="width:400px;">
-      <n-input v-model:value="password" type="password" :placeholder="t('settings.advancedPassword')" @keyup.enter="verifyPwd" />
-      <n-p v-if="pwdError">{{ t("settings.passwordHint", { hint: pwdHint }) }}</n-p>
-      <template #footer>
-        <n-button @click="verifyPwd" type="primary">{{ t("common.confirm") }}</n-button>
-      </template>
-    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
 import { useAppConfig } from "../composables/useAppConfig"
-import { verifyPassword } from "../api/auth"
 import { backup } from "../api/sync"
 import { selectDir } from "../api/files"
+import PageTitle from "../components/common/PageTitle.vue"
 import { useMessage } from "naive-ui"
 
 const { t, setLocale, currentLocale } = useI18n()
 const settingsStore = useSettingsStore()
 const { config } = useAppConfig()
-const router = useRouter()
 const message = useMessage()
 const showGuideModal = ref(false)
-const showPasswordModal = ref(false)
-const password = ref("")
-const pwdError = ref(false)
-const pwdHint = ref("")
 const localeVal = ref(currentLocale.value)
 
-onMounted(() => { settingsStore.fetchSettings() })
+onMounted(() => {
+  settingsStore.fetchSettings()
+})
 
 async function checkUpdate() {
   const result = await settingsStore.checkUpdate()
@@ -108,17 +93,5 @@ async function backupNow() {
     await backup()
     message.success(t("settings.backupSuccess"))
   } catch { message.error(t("settings.backupFailed", { reason: "未知" })) }
-}
-
-async function verifyPwd() {
-  const result = await verifyPassword(password.value)
-  if (result.success) {
-    sessionStorage.setItem("advanced_authenticated", "1")
-    showPasswordModal.value = false
-    router.push("/advanced")
-  } else {
-    pwdError.value = true
-    pwdHint.value = result.hint || ""
-  }
 }
 </script>

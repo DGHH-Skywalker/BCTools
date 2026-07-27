@@ -6,14 +6,16 @@
   },
   "nav": {
     "home": "Home",
-    "songImport": "Song Import",
+    "songImport": "Dorm Song Selection",
     "dormManage": "Dorm Playlist",
     "broadcast": "Broadcast",
     "export": "Export",
     "organize": "Card Swap",
     "settings": "Settings",
     "guide": "Guide",
-    "about": "About"
+    "about": "About",
+    "shutdown": "Exit",
+    "audioPreview": "Audio Preview"
   },
   "weekdays": [
     "Monday",
@@ -36,13 +38,14 @@
   "home": {
     "title": "XiaoBo Playlist",
     "subtitle": "NCM decryption, audio conversion, playlist management and image export",
-    "startButton": "Get Started",
+    "startButton": "Start Song Selection",
     "step1": "Import audio files (ncm / mp3 / flac / wav / mp4)",
     "step2": "Assign songs to time slots",
     "step3": "Export playlist images or organize files"
   },
   "songImport": {
-    "title": "Song Import",
+    "title": "Dorm Song Selection",
+    "dormSelect": "Dorm Song Selection",
     "selectDate": "Select a date to start",
     "backToCalendar": "Back to Calendar",
     "dorm": "Dorm Playlist",
@@ -63,22 +66,43 @@
     "assigned": "Assigned"
   },
   "dormManage": {
-    "title": "Dorm Playlist Management",
+    "title": "Dorm Playlist",
     "importXlsx": "Import xlsx",
     "exportXlsx": "Export xlsx",
     "importResult": "Imported {inserted}, skipped {skipped}, {errors} errors",
-    "noValidData": "No valid data found"
+    "noValidData": "No valid data found",
+    "timeSlots": "Time Slot"
+  },
+  "timeSlots": {
+    "title": "Time Slot Configuration",
+    "order": "Order",
+    "time": "Time",
+    "addSlot": "Add Slot",
+    "deleteSlot": "Delete",
+    "deleteConfirm": "This will delete {count} songs assigned to this slot. Confirm?",
+    "deletedSongs": "Deleted {count} songs"
   },
   "broadcast": {
     "title": "Broadcast Playlist Management",
     "addSong": "Add Song",
     "date": "Date",
     "weekday": "Weekday",
+    "songTitle": "Title",
     "remark": "Remark",
+    "songRemark": "Remark",
     "actions": "Actions",
     "delete": "Delete",
     "importXlsx": "Import xlsx",
-    "exportXlsx": "Export xlsx"
+    "exportXlsx": "Export xlsx",
+    "noon": "Noon",
+    "afternoon": "Afternoon",
+    "column": "Column",
+    "columns": {
+      "news": "News",
+      "literature": "Literature",
+      "music": "Music",
+      "movie": "Movie"
+    }
   },
   "export": {
     "title": "Export",
@@ -89,13 +113,37 @@
     "nextWeek": "Next Week",
     "selectDates": "Select dates",
     "selected": "Selected {count} days",
-    "template": "Template",
-    "templateSimple": "Simple Table",
-    "templatePoster": "Poster Style",
-    "background": "Background Image",
-    "backgroundColor": "Background Color",
+    "mode": "Export mode",
+    "simpleMode": "Simple",
+    "posterMode": "Poster",
+    "year": "Year",
+    "sourceTitle": "Available Years",
+    "targetTitle": "Selected dates",
+    "needBackground": "Poster mode requires a background image",
+    "blurPlaceholder": "No background image",
+    "backgroundImage": "Background Image",
+    "selected": "Selected",
+    "selectImage": "Select Image",
+    "backgroundImageError": "Failed to read background image",
+    "advancedSettings": "Advanced Settings",
+    "vacationBadge": "Limited Badge",
+    "posterBlur": "Background Blur",
+    "posterBlurDorm": "Dorm Background Blur",
+    "posterBlurBroadcast": "Broadcast Background Blur",
+    "posterQuote": "Poster Quote",
+    "posterQuoteDorm": "Dorm Poster Quote",
+    "posterQuoteBroadcast": "Broadcast Poster Quote",
+    "posterQuotePlaceholder": "Enter poster quote",
+    "posterQuoteDormPlaceholder": "Enter dorm poster quote",
+    "posterQuoteBroadcastPlaceholder": "Enter broadcast poster quote",
+    "badgeNone": "Hide",
+    "badgeSummer": "Summer Limited",
+    "badgeWinter": "Winter Limited",
+    "error": "Export failed",
     "exportSingle": "Export Current Date",
     "exportBatch": "Batch Export ({count} days)",
+    "exportDorm": "Export Dorm Playlist",
+    "exportBroadcast": "Export Broadcast Playlist",
     "skipEmpty": "Skipped {count} days with no songs",
     "exporting": "Exporting...",
     "success": "Export successful",
@@ -105,18 +153,24 @@
     "title": "Card Swap",
     "targetDir": "SD Card",
     "browse": "Browse",
-    "dateRange": "Schedule Range",
-    "mode": "Mode",
-    "modeCopy": "Copy",
-    "modeMove": "Move",
-    "generate": "Generate List",
-    "organize": "Start Swap",
+    "selectWeeks": "Select week",
+    "year": "Year",
+    "weekDormPlaylist": "Week {week} Dorm Playlist",
+    "copyToSD": "Copy this week to SD card",
+    "noWeeksSelected": "Please select a week above",
+    "noSongsThisWeek": "No schedule this week",
+    "targetDirRequired": "Please select the SD card folder first",
     "confirmOverwrite": "Files already exist. Overwrite?",
     "success": "Success {count}",
     "failed": "Failed {count}",
-    "noEntries": "No schedule this week",
     "slot": "Time Slot",
-    "targetName": "Target Filename"
+    "mobileWarning": "This feature is usually used on a computer. Are you sure you want to export song folders on this device?",
+    "confirmEnter": "Enter",
+    "goBack": "Back",
+    "noTargetDir": "No folder selected",
+    "selectFolderFailed": "Failed to select folder. Please try again.",
+    "silentPlaceholder": "(Silent placeholder)",
+    "organizeFailed": "Organization failed. Please try again later."
   },
   "settings": {
     "title": "Settings",
@@ -134,25 +188,8 @@
     "backupNow": "Backup Now",
     "backupSuccess": "Backup successful",
     "backupFailed": "Backup failed: {reason}",
-    "advanced": "Advanced Settings",
     "guide": "User Guide",
-    "advancedPassword": "Enter advanced settings password",
-    "passwordHint": "Password hint: {hint}",
     "language": "Language"
-  },
-  "advanced": {
-    "title": "Advanced Settings",
-    "timeSlots": "Time Slot Configuration",
-    "order": "Order",
-    "time": "Time",
-    "addSlot": "Add Slot",
-    "deleteSlot": "Delete",
-    "deleteConfirm": "This will delete {count} songs assigned to this slot. Confirm?",
-    "deletedSongs": "Deleted {count} songs",
-    "undo": "Undo",
-    "undoExpired": "Undo expired",
-    "locked": "Locked, please re-enter password",
-    "exit": "Exit Advanced Settings"
   },
   "guide": {
     "title": "User Guide",
@@ -182,7 +219,8 @@
   "about": {
     "copyright": "Egansama, Copyright © 2026",
     "description": "A playlist management tool for campus broadcast",
-    "qq": "QQ: 123456789",
+    "author": "EganSama（105温佳辰）",
+    "qqLink": "Add me on QQ",
     "github": "GitHub: @Egansama"
   },
   "error": {
@@ -202,6 +240,8 @@
     "today": "Today",
     "yes": "Yes",
     "no": "No",
-    "listen": "Listen"
+    "listen": "Listen",
+    "replace": "Replace",
+    "menu": "Menu"
   }
 }

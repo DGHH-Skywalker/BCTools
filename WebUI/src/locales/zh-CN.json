@@ -6,23 +6,25 @@
   },
   "nav": {
     "home": "首页",
-    "songImport": "歌曲导入",
+    "songImport": "宿舍点歌",
     "dormManage": "宿舍歌单",
     "broadcast": "播音歌单",
     "export": "歌单导出",
     "organize": "换卡工具",
     "settings": "软件设置",
     "guide": "软件指南",
-    "about": "软件作者"
+    "about": "软件作者",
+    "shutdown": "关闭程序",
+    "audioPreview": "音频预览"
   },
   "weekdays": [
-    "周一",
-    "周二",
-    "周三",
-    "周四",
-    "周五",
-    "周六",
-    "周日"
+    "星期一",
+    "星期二",
+    "星期三",
+    "星期四",
+    "星期五",
+    "星期六",
+    "星期日"
   ],
   "weekdaysShort": [
     "一",
@@ -36,13 +38,14 @@
   "home": {
     "title": "广播站歌单工具",
     "subtitle": "整合 ncm 解密、音频转换、歌单管理与图片导出于一体",
-    "startButton": "开始使用",
+    "startButton": "开始点歌",
     "step1": "导入歌曲文件（支持 ncm / mp3 / flac / wav / mp4）",
     "step2": "将歌曲分配到对应时段",
     "step3": "导出歌单图片或整理文件到目标文件夹"
   },
   "songImport": {
-    "title": "歌曲导入",
+    "title": "宿舍点歌",
+    "dormSelect": "宿舍点歌",
     "selectDate": "选择日期开始导入",
     "backToCalendar": "返回日历",
     "dorm": "宿舍歌单",
@@ -66,22 +69,43 @@
     "assigned": "已分配"
   },
   "dormManage": {
-    "title": "宿舍歌单管理",
+    "title": "宿舍歌单",
     "importXlsx": "导入 xlsx",
     "exportXlsx": "导出 xlsx",
     "importResult": "导入 {inserted} 首，跳过 {skipped} 行，{errors} 个错误",
-    "noValidData": "未发现有效数据"
+    "noValidData": "未发现有效数据",
+    "timeSlots": "时段"
+  },
+  "timeSlots": {
+    "title": "时段配置",
+    "order": "次序",
+    "time": "时间",
+    "addSlot": "添加时段",
+    "deleteSlot": "删除",
+    "deleteConfirm": "将删除 {count} 首已分配到此时段的歌曲，确认删除？",
+    "deletedSongs": "已删除 {count} 首歌曲"
   },
   "broadcast": {
     "title": "播音歌单管理",
     "addSong": "添加歌曲",
     "date": "日期",
     "weekday": "星期",
+    "songTitle": "歌名",
     "remark": "备注",
+    "songRemark": "备注",
     "actions": "操作",
     "delete": "删除",
     "importXlsx": "导入 xlsx",
-    "exportXlsx": "导出 xlsx"
+    "exportXlsx": "导出 xlsx",
+    "noon": "中午",
+    "afternoon": "下午",
+    "column": "栏目",
+    "columns": {
+      "news": "新闻",
+      "literature": "文学",
+      "music": "音乐",
+      "movie": "电影"
+    }
   },
   "export": {
     "title": "歌单导出",
@@ -92,13 +116,37 @@
     "nextWeek": "下周",
     "selectDates": "选择要导出的日期",
     "selected": "已选择 {count} 天",
-    "template": "模板",
-    "templateSimple": "简约表格",
-    "templatePoster": "海报风格",
-    "background": "背景图（可选）",
-    "backgroundColor": "背景色",
+    "mode": "导出模式",
+    "simpleMode": "简约模式",
+    "posterMode": "海报模式",
+    "year": "年份",
+    "sourceTitle": "可选年份",
+    "targetTitle": "已选日期",
+    "needBackground": "海报模式需要选择背景图片",
+    "blurPlaceholder": "未选择背景图",
+    "backgroundImage": "背景图片",
+    "selected": "已选择",
+    "selectImage": "选择图片",
+    "backgroundImageError": "背景图读取失败",
+    "advancedSettings": "高级设置",
+    "vacationBadge": "限定徽章",
+    "posterBlur": "背景模糊",
+    "posterBlurDorm": "宿舍背景模糊",
+    "posterBlurBroadcast": "播音背景模糊",
+    "posterQuote": "海报文案",
+    "posterQuoteDorm": "宿舍海报文案",
+    "posterQuoteBroadcast": "播音海报文案",
+    "posterQuotePlaceholder": "请输入海报文案",
+    "posterQuoteDormPlaceholder": "请输入宿舍海报文案",
+    "posterQuoteBroadcastPlaceholder": "请输入播音海报文案",
+    "badgeNone": "不显示",
+    "badgeSummer": "暑假限定",
+    "badgeWinter": "寒假限定",
+    "error": "导出失败",
     "exportSingle": "导出当前日期",
     "exportBatch": "批量导出（{count} 天）",
+    "exportDorm": "导出宿舍歌单",
+    "exportBroadcast": "导出播音歌单",
     "skipEmpty": "跳过 {count} 天无歌曲的日期",
     "exporting": "导出中...",
     "success": "导出成功",
@@ -108,18 +156,24 @@
     "title": "换卡工具",
     "targetDir": "SD卡目录",
     "browse": "浏览",
-    "dateRange": "排班日期范围",
-    "mode": "整理方式",
-    "modeCopy": "复制",
-    "modeMove": "移动",
-    "generate": "生成清单",
-    "organize": "开始换卡",
+    "selectWeeks": "选择第x周",
+    "year": "年份",
+    "weekDormPlaylist": "第{week}周宿舍歌单",
+    "copyToSD": "复制本周到 SD 卡",
+    "noWeeksSelected": "请在上方选择要查看的周次",
+    "noSongsThisWeek": "本周暂无排班",
+    "targetDirRequired": "请先选择 SD 卡目录",
     "confirmOverwrite": "以下文件已存在，确认覆盖？",
     "success": "成功 {count} 个",
     "failed": "失败 {count} 个",
-    "noEntries": "本周暂无排班",
     "slot": "时段",
-    "targetName": "目标文件名"
+    "mobileWarning": "该功能一般在电脑上使用，确定你需要在该设备上使用导出歌曲文件夹的功能？",
+    "confirmEnter": "确定进入",
+    "goBack": "返回",
+    "noTargetDir": "未选择文件夹",
+    "selectFolderFailed": "选择文件夹失败，请重试",
+    "silentPlaceholder": "（静音占位）",
+    "organizeFailed": "整理失败，请稍后重试"
   },
   "settings": {
     "title": "软件设置",
@@ -137,25 +191,8 @@
     "backupNow": "立即备份",
     "backupSuccess": "备份成功",
     "backupFailed": "备份失败：{reason}",
-    "advanced": "高级设置",
     "guide": "软件指南",
-    "advancedPassword": "请输入高级设置密码",
-    "passwordHint": "密码提示：{hint}",
     "language": "界面语言"
-  },
-  "advanced": {
-    "title": "高级设置",
-    "timeSlots": "时段配置",
-    "order": "次序",
-    "time": "时间",
-    "addSlot": "添加时段",
-    "deleteSlot": "删除",
-    "deleteConfirm": "将删除 {count} 首已分配到此时段的歌曲，确认删除？",
-    "deletedSongs": "已删除 {count} 首歌曲",
-    "undo": "撤销",
-    "undoExpired": "撤销已过期",
-    "locked": "已被锁定，请重新验证密码",
-    "exit": "退出高级设置"
   },
   "guide": {
     "title": "软件指南",
@@ -185,7 +222,8 @@
   "about": {
     "copyright": "Egansama，版权所有 © 2026",
     "description": "一个面向校园广播站的歌单管理工具",
-    "qq": "QQ: 123456789",
+    "author": "EganSama（105温佳辰）",
+    "qqLink": "点击加我 QQ",
     "github": "GitHub: @Egansama"
   },
   "error": {
@@ -205,6 +243,8 @@
     "today": "今天",
     "yes": "是",
     "no": "否",
-    "listen": "试听"
+    "listen": "试听",
+    "replace": "替换",
+    "menu": "菜单"
   }
 }
