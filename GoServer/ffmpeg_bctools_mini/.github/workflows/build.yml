@@ -1,0 +1,49 @@
+name: Build ffmpeg_bctools_mini
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-lame
+            git
+            make
+            pkg-config
+
+      - name: Build
+        run: bash build.sh
+
+      - name: Show size
+        run: ls -lh dist/ffmpeg.exe dist/ffprobe.exe
+
+      - name: Test
+        run: |
+          ./dist/ffmpeg.exe -y -f lavfi -i anullsrc=r=44100:cl=mono -t 2 -acodec libmp3lame -q:a 2 dist/silence.mp3
+          ./dist/ffprobe.exe -v quiet -print_format json -show_format dist/silence.mp3
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg_bctools_mini
+          path: dist/*
