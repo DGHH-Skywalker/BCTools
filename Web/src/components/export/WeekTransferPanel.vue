@@ -10,11 +10,6 @@
       >
         <template #header>
           <div class="week-header" @click.stop>
-            <n-checkbox
-              :checked="isWeekChecked(group)"
-              :indeterminate="isWeekIndeterminate(group)"
-              @update:checked="toggleWeek(group, $event)"
-            />
             <span class="week-label">{{ group.label }}</span>
             <span class="week-count">({{ group.selectedCount }}/{{ group.options.length }})</span>
           </div>
@@ -39,7 +34,7 @@
 import { computed, ref, watch } from "vue"
 import dayjs from "dayjs"
 import isoWeek from "dayjs/plugin/isoWeek"
-import { NCheckbox, NCollapse, NCollapseItem, NEmpty } from "naive-ui"
+import { NCollapse, NCollapseItem, NEmpty } from "naive-ui"
 
 dayjs.extend(isoWeek)
 
@@ -115,15 +110,6 @@ watch(
 
 function isSelected(value: string): boolean {
   return selectedSet.value.has(value)
-}
-
-function isWeekChecked(group: { options: DayOption[] }): boolean {
-  return group.options.every((o) => selectedSet.value.has(o.value))
-}
-
-function isWeekIndeterminate(group: { options: DayOption[] }): boolean {
-  const selected = group.options.filter((o) => selectedSet.value.has(o.value)).length
-  return selected > 0 && selected < group.options.length
 }
 
 function toggleDay(value: string, checked: boolean) {

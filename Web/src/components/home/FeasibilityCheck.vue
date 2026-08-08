@@ -30,7 +30,7 @@
       :content="t('feasibilityCheck.confirmContent')"
       :positive-text="t('feasibilityCheck.enterAnyway')"
       :negative-text="t('common.cancel')"
-      @positive-click="$router.push('/song/import')"
+      @positive-click="$router.push('/dorm/manage')"
     />
   </div>
 </template>
@@ -156,7 +156,7 @@ async function runChecks() {
 
 function start() {
   if (allPassed.value) {
-    router.push("/song/import")
+    router.push("/dorm/manage")
   } else {
     showConfirm.value = true
   }

@@ -46,52 +46,100 @@
           </template>
 
           <n-space vertical style="width:100%;">
-            <n-text v-if="slotLists[getSlotKey(date, sec.slotId)].length === 0" depth="3">{{ t("common.empty") }}</n-text>
-
             <draggable
-              v-else
               v-model="slotLists[getSlotKey(date, sec.slotId)]"
               item-key="id"
               handle=".drag-handle"
               :animation="150"
               :group="{ name: 'dorm-songs' }"
+              :filter="'.no-drag'"
+              :prevent-on-filter="true"
+              ghost-class="song-row-ghost"
+              drag-class="song-row-drag"
+              class="slot-draggable"
               @change="(e: any) => onSlotChange(date, sec.slotId, e)"
             >
               <template #item="{ element: song }">
-                <div class="song-row">
-                  <span class="drag-handle" :title="t('dorm.dragSort')">
-                    <svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true">
+                <div class="song-row"
+                  >
+                  <span class="drag-handle" :title="t('dorm.dragSort')"
+                    >
+                    <svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true"
+                    >
                       <circle cx="2.5" cy="3" r="1.3" fill="currentColor" /><circle cx="2.5" cy="8" r="1.3" fill="currentColor" /><circle cx="2.5" cy="13" r="1.3" fill="currentColor" />
                       <circle cx="7" cy="3" r="1.3" fill="currentColor" /><circle cx="7" cy="8" r="1.3" fill="currentColor" /><circle cx="7" cy="13" r="1.3" fill="currentColor" />
                     </svg>
                   </span>
-                  <div class="song-info">
+                  <div class="song-info"
+                    >
                     <n-input
+                      class="no-drag"
                       :value="song.title"
                       size="small"
                       :placeholder="t('broadcast.songTitle')"
                       @update:value="(v: string) => updateTitle(song.id, v)"
                       @blur="saveTitle(song.id, song.title)"
                     />
-                    <div v-if="duplicateWarnings(song).length" style="color:#d4a017;font-size:12px;line-height:1.4;">
-                      <div v-for="w in duplicateWarnings(song)" :key="w.id">
+                    <div v-if="duplicateWarnings(song).length" style="color:#d4a017;font-size:12px;line-height:1.4;"
+                    >
+                      <div v-for="w in duplicateWarnings(song)" :key="w.id"
+                      >
                         {{ t("dorm.duplicateWarning", { date: w.date, title: w.title }) }}
                       </div>
                     </div>
                   </div>
+
+                  <n-popover
+                    class="no-drag"
+                    trigger="click"
+                    placement="bottom"
+                    :show-arrow="false"
+                    :show="openSlotSongId === song.id"
+                    @clickoutside="openSlotSongId = null"
+                  >
+                    <template #trigger>
+                      <n-button
+                        class="no-drag"
+                        size="tiny"
+                        :title="t('dorm.assignSlot')"
+                        @click="openSlotSongId = song.id"
+                      >
+                        {{ slotLabelForSong(song) }}
+                      </n-button>
+                    </template>
+                    <div class="slot-option-list"
+                    >
+                      <div
+                        v-for="opt in slotOptionsForDate(song.date)"
+                        :key="opt.value"
+                        class="slot-option"
+                        :class="{ active: opt.value === song.timeSlotId }"
+                        @click="assignSongToSlot(song.id, opt.value as string | null)"
+                      >{{ opt.label }}</div>
+                    </div>
+                  </n-popover>
+
                   <n-button
                     v-if="song.filePath"
+                    class="no-drag"
                     size="tiny"
                     :type="player.currentFile.value === song.filePath ? 'primary' : 'default'"
                     @click="player.play(song.filePath, song.title)"
                   >
                     {{ player.currentFile.value === song.filePath ? t('common.pause') : t('common.listen') }}
                   </n-button>
-                  <n-button size="tiny" type="error" @click="removeSong(song.id)">
+                  <n-button class="no-drag" size="tiny" type="error" @click="removeSong(song.id)"
+                  >
                     <template #icon>
                       <Delete theme="outline" :size="14" :strokeWidth="3" />
                     </template>
                   </n-button>
+                </div>
+              </template>
+              <template #footer>
+                <div v-if="slotLists[getSlotKey(date, sec.slotId)].length === 0" class="empty-slot-placeholder"
+                >
+                  <n-text depth="3">{{ t("common.empty") }}</n-text>
                 </div>
               </template>
             </draggable>
@@ -111,7 +159,6 @@ import { useAudioPlayer } from "../../composables/useAudioPlayer"
 import { Delete } from "@icon-park/vue-next"
 import { findSimilarSongs } from "../../utils/songSimilarity"
 import draggable from "vuedraggable"
-import { useRouter } from "vue-router"
 import dayjs from "dayjs"
 import type { Song, TimeSlot } from "../../api/types"
 
@@ -119,13 +166,17 @@ const props = defineProps<{
   weekDates: string[]
 }>()
 
+const emit = defineEmits<{
+  (e: "open-import", payload: { date: string; timeSlotId?: string }): void
+}>()
+
 const { t, weekdayName } = useI18n()
 const songsStore = useSongsStore()
 const settingsStore = useSettingsStore()
 const player = useAudioPlayer()
-const router = useRouter()
 
 const slotLists = reactive<Record<string, Song[]>>({})
+const openSlotSongId = ref<number | null>(null)
 
 function getSlotKey(date: string, slotId: string | null): string {
   return `${date}|${slotId || "__unassigned__"}`
@@ -175,6 +226,29 @@ function songsForSlot(date: string, slotId: string | null): Song[] {
   return daySongs
     .filter((s) => !s.timeSlotId || !slots.some((sl) => sl.id === s.timeSlotId))
     .sort((a, b) => a.id - b.id)
+}
+
+function slotOptionsForDate(date: string) {
+  const slots = slotsForDate(date)
+  const options = slots.map((slot) => ({ label: slot.time, value: slot.id }))
+  options.unshift({ label: t("dorm.unassigned"), value: "__unassigned__" })
+  return options
+}
+
+function slotLabelForSong(song: Song): string {
+  if (!song.timeSlotId) return t("dorm.unassigned")
+  const slot = settingsStore.timeSlots.find((s) => s.id === song.timeSlotId)
+  return slot ? slot.time : t("dorm.unassigned")
+}
+
+async function assignSongToSlot(songId: number, slotId: string | null) {
+  openSlotSongId.value = null
+  const realSlotId = slotId === "__unassigned__" ? null : slotId
+  try {
+    await songsStore.updateSong(songId, { timeSlotId: realSlotId })
+  } catch (err: any) {
+    console.error("分配时段失败", err)
+  }
 }
 
 function refreshSlotLists() {
@@ -248,8 +322,8 @@ async function saveTitle(id: number, title: string) {
   }
 }
 
-function goToImport(date: string) {
-  router?.push({ path: "/song/import", query: { date } })
+function goToImport(date: string, timeSlotId?: string) {
+  emit("open-import", { date, timeSlotId })
 }
 
 async function removeSong(id: number) {
@@ -328,18 +402,23 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   width: 100%;
+  padding: 2px 0;
 }
 
 .song-row + .song-row {
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
-.song-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.song-row-ghost {
+  opacity: 0.5;
+  background: var(--theme-color-light, rgba(0, 134, 195, 0.12));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.song-row-drag {
+  opacity: 0.9;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .drag-handle {
@@ -360,6 +439,62 @@ onMounted(() => {
 
 .drag-handle:active {
   cursor: grabbing;
+}
+
+.song-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slot-draggable {
+  min-height: 36px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.slot-draggable:has(.song-row) {
+  background-color: transparent;
+}
+
+.empty-slot-placeholder {
+  text-align: center;
+  padding: 8px 4px;
+  pointer-events: none;
+}
+
+.slot-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 96px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.slot-option {
+  padding: 4px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #333;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.slot-option:hover {
+  background: var(--theme-color-light);
+}
+
+.slot-option.active {
+  background: var(--theme-color);
+  color: #fff;
+  font-weight: 500;
 }
 
 .slot-time-edit,

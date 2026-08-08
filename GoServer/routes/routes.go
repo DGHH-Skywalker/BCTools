@@ -56,10 +56,6 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 			r.Get("/info", hs.Network.HandleGetInfo)
 			r.Get("/qr", hs.Network.HandleGetQR)
 		})
-		r.Route("/hotspot", func(r chi.Router) {
-			r.Post("/start", hs.Network.HandleStartHotspot)
-			r.Get("/status", hs.Network.HandleGetHotspotStatus)
-		})
 		r.Route("/decrypt", func(r chi.Router) {
 			r.Post("/stage", hs.Decrypt.HandleStage)
 			r.Get("/stage/{id}", hs.Decrypt.HandleStageMeta)

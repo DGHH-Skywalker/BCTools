@@ -158,13 +158,7 @@ onMounted(() => {
   }
 }
 
-@media (min-width: 1200px) {
-  .broadcast-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1600px) {
+@media (min-width: 1024px) {
   .broadcast-grid {
     grid-template-columns: repeat(4, 1fr);
   }

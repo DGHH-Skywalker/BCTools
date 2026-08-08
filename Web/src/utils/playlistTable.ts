@@ -1,8 +1,11 @@
 import dayjs from "dayjs"
 import isoWeek from "dayjs/plugin/isoWeek"
+import { Segment, useDefault } from "segmentit"
 import type { Song, TimeSlot } from "../api/types"
 
 dayjs.extend(isoWeek)
+
+const segment = useDefault(new Segment())
 
 export interface BuildDormTableOptions {
   title?: string | null
@@ -29,22 +32,34 @@ export function parseTime(time: string): number {
   return new Date(1970, 0, 1, h || 0, m || 0).getTime()
 }
 
-// 罗马数字序号（用于同时间段多首歌时的前缀）。
-export function toRoman(num: number): string {
-  const map: [number, string][] = [
-    [1000, "M"], [900, "CM"], [500, "D"], [400, "CD"],
-    [100, "C"], [90, "XC"], [50, "L"], [40, "XL"],
-    [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"],
-  ]
-  let n = num
-  let out = ""
-  for (const [v, s] of map) {
-    while (n >= v) {
-      out += s
-      n -= v
-    }
+// 带圈数字序号（用于同时间段多首歌时的前缀），1-20 用 Unicode 带圈数字，超出回退到普通数字。
+export function toCircledNumber(num: number): string {
+  if (num >= 1 && num <= 10) {
+    return String.fromCharCode(0x245f + num) // ①-⑩
   }
-  return out || "I"
+  if (num >= 11 && num <= 20) {
+    return String.fromCharCode(0x2469 + (num - 10)) // ⑪-⑳
+  }
+  return `${num}`
+}
+
+// 对中文标题进行分词，在词组之间插入零宽空格，使导出图片按词组断行。
+export function segmentChineseTitle(title: string): string {
+  if (!title) return title
+  try {
+    const segs = segment.doSegment(title)
+    return segs.map((s: any) => (s && typeof s === "object" ? s.w : String(s))).join("​")
+  } catch {
+    return title
+  }
+}
+
+// 导出标题格式化：中文分词 + HTML 转义 + 支持 \n 换行。
+export function formatExportTitle(title: string): string {
+  if (!title) return ""
+  const segmented = segmentChineseTitle(title)
+  const escaped = escapeHtml(segmented)
+  return escaped.replace(/\\n/g, "<br>")
 }
 
 function slotsForDate(dateStr: string, timeSlots: TimeSlot[]): TimeSlot[] {
@@ -92,8 +107,11 @@ export function buildDormTableHTML(dates: string[], options: BuildDormTableOptio
       const titleText = slotSongs
         .map((song, i) => {
           const title = song.title && song.title.trim() ? song.title : (options.emptyTitleText ?? "（未命名）")
-          const label = slotSongs.length > 1 ? `${toRoman(i + 1)}. ${title}` : title
-          return escapeHtml(label)
+          const titleHtml = formatExportTitle(title)
+          if (slotSongs.length > 1) {
+            return `<span class="song-with-number"><span class="circled-number">${toCircledNumber(i + 1)}</span><span class="song-title">${titleHtml}</span></span>`
+          }
+          return `<span class="song-with-number"><span class="song-title">${titleHtml}</span></span>`
         })
         .join("<br/>")
       return `<td>${titleText}</td>`

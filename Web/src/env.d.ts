@@ -9,3 +9,13 @@ declare module "vuedraggable" {
   const component: DefineComponent<any, any, any>
   export default component
 }
+
+declare module "segmentit" {
+  export class Segment {
+    constructor()
+    useDefault(): void
+  }
+  export function useDefault(segment: Segment): {
+    doSegment(text: string): Array<{ w: string } | string>
+  }
+}

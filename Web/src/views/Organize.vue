@@ -28,22 +28,20 @@
         <n-space vertical class="organize-weeks-space">
           <n-text>{{ t("organize.selectWeeks") }}:</n-text>
           <n-select
-            v-model:value="selectedWeeks"
-            multiple
+            v-model:value="selectedWeek"
             :options="weekOptions"
             :placeholder="t('organize.selectWeeksPlaceholder')"
-            max-tag-count="responsive"
             clearable
           />
         </n-space>
       </n-space>
     </n-card>
 
-    <template v-if="selectedWeeks.length > 0">
-      <n-card v-for="week in selectedWeeks" :key="week" class="organize-card" :title="t('organize.weekDormPlaylist', { week })">
-        <div v-html="tableHTMLForWeek(week)" />
+    <template v-if="selectedWeek != null">
+      <n-card class="organize-card" :title="t('organize.weekDormPlaylist', { week: selectedWeek })">
+        <DormPlaylistTable :dates="datesForWeek(selectedWeek)" :songs="songsStore.dormSongs" :timeSlots="settingsStore.timeSlots" />
         <n-space class="organize-week-actions">
-          <n-button type="primary" :disabled="!copyMode" :loading="copyingWeek === week" @click="copyWeek(week)">{{ t("organize.copyToSD") }}</n-button>
+          <n-button type="primary" :disabled="!copyMode" :loading="copyingWeek" @click="copyWeek(selectedWeek)">{{ t("organize.copyToSD") }}</n-button>
         </n-space>
       </n-card>
     </template>
@@ -70,7 +68,7 @@ import type { SelectOption } from "naive-ui"
 import dayjs from "dayjs"
 import isoWeek from "dayjs/plugin/isoWeek"
 import YearSelect from "../components/common/YearSelect.vue"
-import { buildDormTableHTML } from "../utils/playlistTable"
+import DormPlaylistTable from "../components/dorm/DormPlaylistTable.vue"
 import type { TimeSlot } from "../api/types"
 
 dayjs.extend(isoWeek)
@@ -91,7 +89,7 @@ const logoSrc = computed(() =>
   matchMedia("(prefers-color-scheme: dark)").matches ? "/logo-white.png" : "/logo.png"
 )
 
-const { t, weekdayShortName } = useI18n()
+const { t } = useI18n()
 const songsStore = useSongsStore()
 const settingsStore = useSettingsStore()
 const message = useMessage()
@@ -102,8 +100,8 @@ const targetDirName = ref("")
 const targetDirHandle = ref<FileSystemDirectoryHandle | null>(null)
 const copyMode = ref<"backend" | "frontend" | null>(null)
 const selectedYear = ref(dayjs().year())
-const selectedWeeks = ref<number[]>([])
-const copyingWeek = ref<number | null>(null)
+const selectedWeek = ref<number | null>(null)
+const copyingWeek = ref<boolean>(false)
 const showConfirm = ref(false)
 const existingFiles = ref<string[]>([])
 const pendingWeek = ref<number | null>(null)
@@ -147,16 +145,6 @@ function datesForWeek(week: number): string[] {
     cur = cur.add(1, "day")
   }
   return dates
-}
-
-function tableHTMLForWeek(week: number): string {
-  const dates = datesForWeek(week)
-  return buildDormTableHTML(dates, {
-    title: null,
-    songs: songsStore.dormSongs,
-    timeSlots: settingsStore.timeSlots,
-    weekdayShortName,
-  })
 }
 
 function buildEntries(dates: string[]): { source: string; targetName: string }[] {
@@ -257,7 +245,7 @@ async function doBackendCopy(week: number, confirm: boolean) {
     return
   }
 
-  copyingWeek.value = week
+  copyingWeek.value = true
   try {
     const res = await organizeFiles({
       entries,
@@ -268,7 +256,7 @@ async function doBackendCopy(week: number, confirm: boolean) {
     if (res.confirmNeeded) {
       existingFiles.value = res.existingFiles || []
       showConfirm.value = true
-      copyingWeek.value = null
+      copyingWeek.value = false
       return
     }
     message.success(t("organize.success", { count: res.successful.length }))
@@ -278,7 +266,7 @@ async function doBackendCopy(week: number, confirm: boolean) {
   } catch (err: any) {
     message.error(err?.message || t("organize.organizeFailed"))
   } finally {
-    copyingWeek.value = null
+    copyingWeek.value = false
     pendingWeek.value = null
     showConfirm.value = false
   }
@@ -308,17 +296,17 @@ async function doFrontendCopy(week: number, confirm: boolean) {
     if (existing.length > 0) {
       existingFiles.value = existing
       showConfirm.value = true
-      copyingWeek.value = null
+      copyingWeek.value = false
       return
     }
   }
 
-  copyingWeek.value = week
+  copyingWeek.value = true
   try {
     const perm = await (dirHandle as any).requestPermission({ mode: "readwrite" })
     if (perm !== "granted") {
       message.error("没有目录写入权限")
-      copyingWeek.value = null
+      copyingWeek.value = false
       pendingWeek.value = null
       return
     }
@@ -345,7 +333,7 @@ async function doFrontendCopy(week: number, confirm: boolean) {
   } catch (err: any) {
     message.error(err?.message || t("organize.organizeFailed"))
   } finally {
-    copyingWeek.value = null
+    copyingWeek.value = false
     pendingWeek.value = null
     showConfirm.value = false
   }

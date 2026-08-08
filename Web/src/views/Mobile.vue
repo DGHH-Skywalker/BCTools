@@ -13,69 +13,24 @@
     <n-card class="mobile-card" :title="t('mobile.appUrlTitle')">
       <n-space vertical align="center">
         <n-text code class="mobile-url">{{ networkInfo?.url || '...' }}</n-text>
-        <img v-if="networkInfo" class="mobile-qr" :src="`/api/network/qr?type=app&t=${qrTs}`" alt="App QR" />
+        <img v-if="networkInfo" class="mobile-qr" :src="`/api/network/qr?t=${qrTs}`" alt="App QR" />
         <n-text depth="3" class="mobile-tip">{{ t('mobile.sameNetworkTip') }}</n-text>
       </n-space>
     </n-card>
-
-    <n-card class="mobile-card">
-      <n-space justify="center">
-        <n-button type="primary" @click="openHotspotModal">
-          <template #icon>
-            <Wifi theme="outline" />
-          </template>
-          {{ t('mobile.openHotspot') }}
-        </n-button>
-      </n-space>
-    </n-card>
-
-    <n-modal v-model:show="showModal" preset="card" :title="t('mobile.hotspotModalTitle')" :mask-closable="false" class="mobile-modal">
-      <n-space vertical align="center" class="mobile-modal-body">
-        <template v-if="hotspot.status === 'starting'">
-          <n-spin size="large" />
-          <n-text>{{ t('mobile.startingHotspot') }}</n-text>
-        </template>
-        <template v-else-if="hotspot.status === 'started'">
-          <img class="mobile-qr" :src="`/api/network/qr?type=hotspot&t=${qrTs}`" alt="WiFi QR" />
-          <n-space vertical class="mobile-hotspot-info">
-            <n-space justify="space-between">
-              <n-text strong>SSID</n-text>
-              <n-text>{{ hotspot.ssid }}</n-text>
-            </n-space>
-            <n-space justify="space-between">
-              <n-text strong>{{ t('mobile.password') }}</n-text>
-              <n-text>{{ hotspot.password }}</n-text>
-            </n-space>
-          </n-space>
-          <n-text depth="3">{{ t('mobile.hotspotReady') }}</n-text>
-        </template>
-        <template v-else-if="hotspot.status === 'failed'">
-          <n-text type="error">{{ hotspot.message || t('mobile.hotspotFailed') }}</n-text>
-          <n-button v-if="hotspot.fallback" @click="openSystemSettings">{{ t('mobile.openSystemSettings') }}</n-button>
-        </template>
-        <template v-else>
-          <n-text depth="3">{{ t('mobile.hotspotIdle') }}</n-text>
-        </template>
-      </n-space>
-    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from "vue"
+import { ref, onMounted, onUnmounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
-import { getNetworkInfo, startHotspot, getHotspotStatus } from "../api/network"
-import type { NetworkInfo, HotspotStatus } from "../api/types"
-import { Wifi } from "@icon-park/vue-next"
+import { getNetworkInfo } from "../api/network"
+import type { NetworkInfo } from "../api/types"
 
 const { t } = useI18n()
 const router = useRouter()
 const networkInfo = ref<NetworkInfo | null>(null)
-const hotspot = ref<HotspotStatus>({ status: "idle", ssid: "", password: "", message: "", fallback: "" })
-const showModal = ref(false)
 const qrTs = ref(Date.now())
-let pollTimer: number | null = null
 let refreshTimer: number | null = null
 
 function isTouchDevice() {
@@ -108,7 +63,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  stopPolling()
   if (refreshTimer !== null) {
     clearInterval(refreshTimer)
     refreshTimer = null
@@ -119,45 +73,6 @@ onUnmounted(() => {
 function handleVisibilityChange() {
   if (document.visibilityState === "visible") {
     refreshNetworkInfo()
-  }
-}
-
-watch(showModal, (visible) => {
-  if (!visible) stopPolling()
-})
-
-function openHotspotModal() {
-  showModal.value = true
-  hotspot.value = { status: "starting", ssid: "", password: "", message: "", fallback: "" }
-  startPolling()
-  startHotspot().catch(() => {})
-}
-
-function startPolling() {
-  stopPolling()
-  pollTimer = window.setInterval(async () => {
-    try {
-      const status = await getHotspotStatus()
-      hotspot.value = status
-      if (status.status === "started" || status.status === "failed") {
-        stopPolling()
-      }
-    } catch {
-      // ignore
-    }
-  }, 500)
-}
-
-function stopPolling() {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
-function openSystemSettings() {
-  if (hotspot.value.fallback) {
-    window.open(hotspot.value.fallback, "_blank")
   }
 }
 </script>
@@ -216,19 +131,6 @@ function openSystemSettings() {
 
 .mobile-tip {
   text-align: center;
-}
-
-.mobile-modal {
-  width: 90%;
-  max-width: 420px;
-}
-
-.mobile-modal-body {
-  padding: var(--spacing-sm) 0;
-}
-
-.mobile-hotspot-info {
-  width: 100%;
 }
 
 @media (max-width: 480px) {

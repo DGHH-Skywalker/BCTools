@@ -9,6 +9,7 @@ const currentTime = ref(0)
 const duration = ref(0)
 const error = ref<string>("")
 const initialPosition = ref<{ x: number; y: number } | null>(null)
+const originRect = ref<DOMRect | null>(null)
 
 const audio = new Audio()
 audio.preload = "metadata"
@@ -103,8 +104,16 @@ export function useAudioPlayer() {
     isVisible.value = false
   }
 
-  function show(position?: { x: number; y: number }) {
-    if (position) initialPosition.value = position
+  function show(source?: { x: number; y: number } | DOMRect) {
+    if (source instanceof DOMRect) {
+      originRect.value = source
+      initialPosition.value = null
+    } else if (source) {
+      initialPosition.value = source
+      originRect.value = null
+    } else {
+      originRect.value = null
+    }
     isVisible.value = true
   }
 
@@ -126,6 +135,7 @@ export function useAudioPlayer() {
     duration: readonly(duration),
     error: readonly(error),
     initialPosition: readonly(initialPosition),
+    originRect: readonly(originRect),
     audioElement: audio,
     play,
     pause,

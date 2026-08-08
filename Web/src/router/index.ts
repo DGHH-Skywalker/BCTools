@@ -7,11 +7,6 @@ const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/home" },
   { path: "/home", component: Home, meta: { standalone: true } },
   {
-    path: "/song/import",
-    component: AppLayout,
-    children: [{ path: "", component: () => import("../views/SongImport.vue"), meta: { title: "宿舍点歌" } }],
-  },
-  {
     path: "/dorm/manage",
     component: AppLayout,
     children: [{ path: "", component: () => import("../views/DormManage.vue"), meta: { title: "宿舍歌单" } }],

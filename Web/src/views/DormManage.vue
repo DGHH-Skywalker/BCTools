@@ -14,7 +14,7 @@
       <n-button size="small" :loading="refreshing" @click="refreshDormSongs">刷新</n-button>
     </n-space>
 
-    <DormGrid :week-dates="weekDates" />
+    <DormGrid :week-dates="weekDates" @open-import="onOpenImport" />
 
     <SettingsFab style="bottom:24px;right:24px;" @click="showSlotModal = true">
       <template #icon>
@@ -22,6 +22,23 @@
       </template>
     </SettingsFab>
     <TimeSlotModal v-model:show="showSlotModal" />
+
+    <n-modal
+      v-model:show="showImportPanel"
+      preset="card"
+      :title="t('dormManage.importSongs')"
+      :style="{ width: '90%', maxWidth: '1000px' }"
+      :mask-closable="false"
+      @after-leave="importDate = ''; importDefaultSlotId = undefined"
+    >
+      <SongImportPanel
+        v-if="importDate"
+        :date="importDate"
+        :default-slot-id="importDefaultSlotId"
+        @close="showImportPanel = false"
+        @song-added="onSongAdded"
+      />
+    </n-modal>
   </div>
 </template>
 
@@ -34,6 +51,7 @@ import { sortSongs } from "../api/songs"
 import { useMessage } from "naive-ui"
 import DormGrid from "../components/dorm/DormGrid.vue"
 import TimeSlotModal from "../components/dorm/TimeSlotModal.vue"
+import SongImportPanel from "../components/dorm/SongImportPanel.vue"
 import SettingsFab from "../components/common/SettingsFab.vue"
 import { Left, Right, Time } from "@icon-park/vue-next"
 import dayjs from "dayjs"
@@ -46,8 +64,11 @@ const settingsStore = useSettingsStore()
 const songsStore = useSongsStore()
 const message = useMessage()
 
-const currentWeek = ref(dayjs().startOf("isoWeek"))
+const currentWeek = ref(dayjs().add(1, "week").startOf("isoWeek"))
 const showSlotModal = ref(false)
+const showImportPanel = ref(false)
+const importDate = ref("")
+const importDefaultSlotId = ref<string | undefined>(undefined)
 const refreshing = ref(false)
 
 const weekDates = computed(() => {
@@ -82,6 +103,16 @@ async function refreshDormSongs() {
   } finally {
     refreshing.value = false
   }
+}
+
+function onOpenImport(payload: { date: string; timeSlotId?: string }) {
+  importDate.value = payload.date
+  importDefaultSlotId.value = payload.timeSlotId
+  showImportPanel.value = true
+}
+
+function onSongAdded() {
+  songsStore.fetchSongs("dorm")
 }
 
 onMounted(() => {

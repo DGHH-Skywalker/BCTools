@@ -67,6 +67,7 @@ import type { SelectOption } from "naive-ui"
 
 const props = defineProps<{
   show: boolean
+  initialDay?: number
 }>()
 
 const emit = defineEmits<{
@@ -95,8 +96,12 @@ watch(
     if (show) {
       localSlots.value = settingsStore.timeSlots.map((s) => ({ ...s }))
       duplicateCheckDaysModel.value = settingsStore.duplicateCheckDays || 30
-      const today = new Date().getDay()
-      selectedDay.value = today === 0 ? 7 : today
+      if (props.initialDay != null && props.initialDay >= 1 && props.initialDay <= 7) {
+        selectedDay.value = props.initialDay
+      } else {
+        const today = new Date().getDay()
+        selectedDay.value = today === 0 ? 7 : today
+      }
     }
   },
   { immediate: true },

@@ -23,6 +23,7 @@
     "modern-screenshot": "^4.4.0",
     "naive-ui": "^2.38.0",
     "pinia": "^2.1.0",
+    "segmentit": "^2.0.3",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0",
     "vuedraggable": "^4.1.0"

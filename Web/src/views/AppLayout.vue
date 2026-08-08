@@ -33,17 +33,17 @@
       </n-space>
     </n-drawer>
 
-    <!-- 手机点歌：左下角浮动按钮（桌面端），无文字，仅图标 -->
+    <!-- 音频预览：左下角浮动按钮（桌面端），仅当存在激活音频且播放器隐藏时显示 -->
     <n-button
-      v-if="!isMobile && route.path !== '/mobile'"
+      v-if="!isMobile && player.currentFile.value && !player.isVisible.value"
       circle
       type="primary"
-      :title="t('nav.mobile')"
-      class="mobile-fab"
-      @click="router.push('/mobile')"
+      :title="t('nav.audioPreview')"
+      class="audio-preview-fab"
+      @click="showAudioPreview"
     >
       <template #icon>
-        <Phone theme="outline" :size="22" :strokeWidth="3" />
+        <Music theme="outline" :size="22" :strokeWidth="3" />
       </template>
     </n-button>
   </n-layout>
@@ -56,7 +56,7 @@ import { useSettingsStore } from "../stores/settings"
 import { useAppConfig } from "../composables/useAppConfig"
 import { useAudioPlayer } from "../composables/useAudioPlayer"
 import type { MenuOption } from "naive-ui"
-import { Download, Clipboard, Broadcast, Export, FolderOpen, Setting, HamburgerButton, Music, Phone, Key } from "@icon-park/vue-next"
+import { Clipboard, Broadcast, Export, FolderOpen, Setting, HamburgerButton, Music, Phone, Key } from "@icon-park/vue-next"
 
 const router = useRouter(); const route = useRoute()
 const { t, setLocale, currentLocale } = useI18n()
@@ -72,57 +72,33 @@ onUnmounted(() => { window.removeEventListener("resize", updateIsMobile) })
 
 const iconProps = { theme: "outline" as const, size: 20, strokeWidth: 3 }
 const routeMenuOptions: MenuOption[] = [
-  { key: "/song/import", label: () => t("nav.songImport"), icon: () => h(Download, iconProps as any) },
   { key: "/dorm/manage", label: () => t("nav.dormManage"), icon: () => h(Clipboard, iconProps as any) },
   { key: "/broadcast", label: () => t("nav.broadcast"), icon: () => h(Broadcast, iconProps as any) },
   { key: "/export", label: () => t("nav.export"), icon: () => h(Export, iconProps as any) },
   { key: "/organize", label: () => t("nav.organize"), icon: () => h(FolderOpen, iconProps as any) },
   { key: "/decrypt", label: () => t("nav.decrypt"), icon: () => h(Key, iconProps as any) },
   { key: "/settings", label: () => t("nav.settings"), icon: () => h(Setting, iconProps as any) },
+  { key: "/mobile", label: () => t("nav.mobile"), icon: () => h(Phone, iconProps as any) },
 ]
-const menuOptions = computed((): MenuOption[] => {
-  const options = [...routeMenuOptions]
-  // 音频预览入口：只有音频已被激活且播放器卡片被隐藏时才显示，
-  // 避免卡片已打开时侧边栏出现重复入口。
-  if (player.currentFile.value && !player.isVisible.value) {
-    options.push({
-      key: "__audio",
-      label: () => t("nav.audioPreview"),
-      icon: () => h(Music, iconProps as any),
-      props: { class: "menu-item-audio-preview" },
-    })
-  }
-  return options
-})
+const menuOptions = computed((): MenuOption[] => routeMenuOptions)
 
-const visibleMenuOptions = computed((): MenuOption[] => {
-  return menuOptions.value
-})
+const visibleMenuOptions = computed((): MenuOption[] => menuOptions.value)
 const activeKey = computed(() => route.path)
 const isHome = computed(() => route.path === "/home")
-const isLocalhost = computed(() => {
-  const host = window.location.hostname
-  return host === "localhost" || host === "127.0.0.1" || host === "::1"
-})
-function handleMenuAction(key: string) {
-  if (key === "__audio") {
-    const el = document.querySelector(".menu-item-audio-preview")
-    if (el) {
-      const rect = el.getBoundingClientRect()
-      player.show({ x: rect.right + 8, y: rect.top })
-    } else {
-      player.show()
-    }
-    return false
-  }
-  return true
-}
 function onMenuChange(key: string) {
-  if (handleMenuAction(key)) router.push(key)
+  router.push(key)
 }
 function onMobileMenuChange(key: string) {
   mobileMenuOpen.value = false
-  if (handleMenuAction(key)) router.push(key)
+  router.push(key)
+}
+function showAudioPreview(e: MouseEvent) {
+  const target = e.currentTarget as HTMLElement | null
+  if (target) {
+    player.show(target.getBoundingClientRect())
+  } else {
+    player.show()
+  }
 }
 function switchLang(locale: "zh-CN" | "en") {
   setLocale(locale)
@@ -138,7 +114,7 @@ function switchLang(locale: "zh-CN" | "en") {
   justify-content: center;
   height: 100%;
 }
-.mobile-fab {
+.audio-preview-fab {
   position: fixed;
   left: 24px;
   bottom: 24px;

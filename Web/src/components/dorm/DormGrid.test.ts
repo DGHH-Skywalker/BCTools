@@ -58,28 +58,19 @@ vi.mock("vuedraggable", () => ({
   }),
 }))
 
-// The add-song button now routes to the import page instead of creating a song inline.
-const { pushSpy } = vi.hoisted(() => ({ pushSpy: vi.fn() }))
-vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: pushSpy }),
-}))
-
 import { defineComponent, h } from "vue"
 import DormGrid from "./DormGrid.vue"
 import { useSongsStore } from "@/stores/songs"
 import { useSettingsStore } from "@/stores/settings"
 import type { TimeSlot } from "@/api/types"
-import {
-  NCard, NSpace, NSpin, NText, NButton, NInput, NTimeline, NTimelineItem,
-  NPopover, NSelect,
-} from "naive-ui"
+import naive from "naive-ui"
 
 dayjs.extend(isoWeek)
 
 const globalStubs = {
   global: {
-    components: { NCard, NSpace, NSpin, NText, NButton, NInput, NTimeline, NTimelineItem, NPopover, NSelect },
-    stubs: { "icon-park": true },
+    plugins: [naive],
+    stubs: { "icon-park": true, TimeSlotModal: true },
   },
 }
 
@@ -154,7 +145,7 @@ describe("DormGrid", () => {
     expect(html).toContain("稻香")
   })
 
-  it("add-song button under the day title routes to the import page for that day", async () => {
+  it("add-song button under the day title emits open-import event for that day", async () => {
     const settingsStore = useSettingsStore()
     settingsStore.timeSlots = mockSlots
 
@@ -179,8 +170,8 @@ describe("DormGrid", () => {
     await addBtn!.trigger("click")
     await flushPromises()
 
-    expect(pushSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "/song/import", query: { date: "2026-07-27" } }),
-    )
+    expect(wrapper.emitted("open-import")?.[0]).toEqual([
+      { date: "2026-07-27" },
+    ])
   })
 })

@@ -11,7 +11,7 @@
       />
       <n-h1 class="home-title" @contextmenu.prevent>{{ t("home.title") }}</n-h1>
       <n-space>
-        <n-button type="primary" size="large" @click="$router.push('/song/import')">{{ t("home.startButton") }}</n-button>
+        <n-button type="primary" size="large" @click="$router.push('/dorm/manage')">{{ t("home.startButton") }}</n-button>
         <n-button size="large" @click="mode = 'feasibility'">{{ t("home.feasibilityCheckButton") }}</n-button>
       </n-space>
     </div>

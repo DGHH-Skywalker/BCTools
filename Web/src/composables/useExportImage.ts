@@ -4,7 +4,7 @@ import { useSettingsStore } from "../stores/settings"
 import { useExportStore } from "../stores/export"
 import { useAppConfig } from "./useAppConfig"
 import { useI18n } from "../i18n"
-import { buildDormTableHTML, parseTime, toRoman } from "../utils/playlistTable"
+import { buildDormTableHTML, parseTime, toCircledNumber, formatExportTitle } from "../utils/playlistTable"
 import dayjs from "dayjs"
 import isoWeek from "dayjs/plugin/isoWeek"
 import { domToPng } from "modern-screenshot"
@@ -46,6 +46,12 @@ export function useExportImage() {
   // 空标题占位：dorm/broadcast 均允许空标题，导出时空标题留空（不显示占位符）
   function displayTitle(song: Song): string {
     return song.title && song.title.trim() ? song.title : ""
+  }
+
+  function songWithNumberHtml(title: string, index: number, showNumber: boolean): string {
+    const titleHtml = formatExportTitle(title)
+    if (!showNumber) return `<div class="song-with-number"><span class="song-title">${titleHtml}</span></div>`
+    return `<div class="song-with-number"><span class="circled-number">${toCircledNumber(index + 1)}</span><span class="song-title">${titleHtml}</span></div>`
   }
 
   // 推断广播时段：优先用 period，缺失时用 createdAt（兜底 date）的小时，异常归下午
@@ -137,7 +143,7 @@ export function useExportImage() {
         return `<tr>
           <td class="ex-simple-table-td-center">${dateCellHtml(s.date)}</td>
           <td class="ex-simple-table-td-center">${escapeHtml(periodLabel)}</td>
-          <td>${escapeHtml(displayTitle(s))}</td>
+          <td>${formatExportTitle(displayTitle(s))}</td>
           <td>${escapeHtml(s.remark)}</td>
         </tr>`
       })
@@ -163,6 +169,15 @@ export function useExportImage() {
       </table>`
   }
 
+  async function preloadImage(src: string): Promise<void> {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => resolve()
+      img.onerror = () => resolve()
+      img.src = src
+    })
+  }
+
   async function buildPosterHTML(dates: string[], type: SongType): Promise<string> {
     const titleText = escapeHtml(type === "dorm" ? t("export.dorm") : t("export.broadcast"))
     const badge = exportStore.vacationBadge
@@ -179,6 +194,9 @@ export function useExportImage() {
           </div>`
 
     const bgImage = exportStore.backgroundImageFor(type)
+    if (bgImage) {
+      await preloadImage(bgImage)
+    }
     const bgLayer = bgImage
       ? `<div class="ex-poster-bg" style="background-image:url(${bgImage});filter:blur(${blurPx}px) brightness(0.95);"></div>`
       : `<div class="ex-poster-bg ex-poster-bg-gradient" style="background:linear-gradient(135deg,${themeColor.value} 0%,#004d70 50%,#1a1a1a 100%);"></div>`
@@ -252,10 +270,7 @@ export function useExportImage() {
               .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id)
             const inner = slotSongs.length > 0
               ? `<div class="ex-poster-cell-stack">${slotSongs
-                  .map((s, idx) => {
-                    const title = escapeHtml(displayTitle(s))
-                    return slotSongs.length > 1 ? `<div>${toRoman(idx + 1)}. ${title}</div>` : `<div>${title}</div>`
-                  })
+                  .map((s, idx) => songWithNumberHtml(displayTitle(s), idx, slotSongs.length > 1))
                   .join("")}</div>`
               : ""
             return cellHtml(inner, false, false, i + 1, colCount, rowIdx + 1, "title", type)
@@ -290,7 +305,7 @@ export function useExportImage() {
       .map((s, rowIdx) => {
         const cells = [
           cellHtml(dateCellHtml(s.date), false, true, 0, colCount, rowIdx + 1, "slot", type),
-          cellHtml(escapeHtml(displayTitle(s)), false, false, 1, colCount, rowIdx + 1, "title", type),
+          cellHtml(formatExportTitle(displayTitle(s)), false, false, 1, colCount, rowIdx + 1, "title", type),
           cellHtml(escapeHtml(s.remark), false, false, 2, colCount, rowIdx + 1, undefined, type),
         ].join("")
         return rowHtml(cells, false, rowIdx + 1)
@@ -335,8 +350,7 @@ export function useExportImage() {
               .slice()
               .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id)
             sortedSongs.forEach((s, idx) => {
-              const title = escapeHtml(displayTitle(s))
-              parts.push(sortedSongs.length > 1 ? `<div>${toRoman(idx + 1)}. ${title}</div>` : `<div>${title}</div>`)
+              parts.push(songWithNumberHtml(displayTitle(s), idx, sortedSongs.length > 1))
             })
             const inner = parts.length > 0
               ? `<div class="ex-poster-cell-stack loose">${parts.join("")}</div>`

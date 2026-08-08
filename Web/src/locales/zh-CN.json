@@ -79,6 +79,7 @@
   },
   "dormManage": {
     "title": "宿舍歌单",
+    "importSongs": "导入歌曲",
     "importXlsx": "导入 xlsx",
     "exportXlsx": "导出 xlsx",
     "importResult": "导入 {inserted} 首，跳过 {skipped} 行，{errors} 个错误",
@@ -170,16 +171,8 @@
   },
   "mobile": {
     "title": "在手机上访问本工具",
-    "openHotspot": "打开电脑移动热点",
-    "hotspotModalTitle": "移动热点",
-    "startingHotspot": "正在开启热点...",
-    "hotspotReady": "热点已开启，请用手机扫描二维码连接",
-    "hotspotFailed": "开启热点失败",
-    "hotspotIdle": "热点未启动",
     "appUrlTitle": "在手机上访问本工具",
     "sameNetworkTip": "手机和电脑应处于同一网络中，否则手机无法连接电脑的后端服务",
-    "password": "密码",
-    "openSystemSettings": "手动打开移动热点",
     "close": "关闭",
     "mobileWarning": "该功能一般在电脑上使用，确定你需要在该设备上使用手机点歌功能？",
     "confirmEnter": "确定进入",
@@ -232,7 +225,8 @@
     "duplicateWarning": "检测到 {date} 已存在“{title}”，疑似重复，请核实",
     "unassigned": "未分配时段",
     "editSlotTime": "点击调整时段时间",
-    "dragSort": "拖拽排序"
+    "dragSort": "拖拽排序",
+    "assignSlot": "设置时段"
   },
   "guide": {
     "title": "软件指南",

@@ -1,0 +1,215 @@
+# 0808 优化计划
+
+> 本计划汇总了新一轮 UI/UX 与功能调整需求，供后续 AI 按步骤执行。执行前请先完整阅读并与用户确认任何歧义。
+
+## Context
+
+本轮需求是对 BCTools（小播点歌工具）做一次集中优化，核心围绕：
+- **宿舍歌单页**：导入入口内嵌、拖拽体验重做、默认显示下周、单首歌时段设置。
+- **歌单导入**：彻底废弃 `/song/import` 独立路由与日历选择，改为 `/dorm/manage` 子状态/子组件内部传参。
+- **导出/整理页**：序号标注化、穿梭框简化、预览组件复用、状态实时同步。
+- **热点/手机点歌/音频预览**：入口互换、热点逻辑精简、动画优化。
+- **解密**：评估 Rust 解密库是否替换现有后端解密。
+
+## 1. 宿舍歌单页（DormManage / DormGrid）
+
+### 1.1 默认显示下周
+- 文件：`Web/src/views/DormManage.vue`
+- `currentWeek` 默认值从 `dayjs().startOf("isoWeek")` 改为 `dayjs().add(1, "week").startOf("isoWeek")`。
+- 周标签同步生效。
+
+### 1.2 导入功能内嵌到 `/dorm/manage`
+- **目标**：完全移除 `/song/import` 路由与日历选择页；点击「添加歌曲」后在宿舍页内部打开导入面板。
+- **文件**：
+  - `Web/src/router/index.ts`：删除 `/song/import` 路由。
+  - `Web/src/views/DormManage.vue`：新增 `showImportPanel`、`importDate`、`importDefaultSlotId` 等内部状态；通过 `n-modal` 弹窗嵌入导入面板；接收 `DormGrid` 的 `open-import` 事件。
+  - `Web/src/views/SongImport.vue`：拆分为：
+    - `Web/src/components/dorm/SongImportPanel.vue`（纯面板，props: `date`、`defaultSlotId`，emit: `close`、`song-added`）。
+    - 如需保留 um-react 桥接入口，可在面板内复用，不再依赖路由 query。
+  - `Web/src/components/dorm/DormGrid.vue`：`goToImport` 不再 `router.push`，改为 `emit('open-import', { date, timeSlotId })`。
+  - `Web/src/views/Home.vue`、`Web/src/components/home/FeasibilityCheck.vue`：原跳转 `/song/import` 改为 `/dorm/manage`（上一步已改，检查即可）。
+
+### 1.3 拖拽体验回滚与重做
+- **回滚**：恢复歌曲名前的小拖拽把手（6 点图标），取消整行拖拽。
+- **重做拖拽锚点**：将可拖拽容器从歌曲列表改为「时间轴节点」（`n-timeline-item` 整体或时段区），使歌曲可拖到任意时段（包括空时段）。
+- **空时段可拖入**：无论某时段是否有歌曲，都要渲染 `<draggable>` 容器并设置 `min-height`，空时段内部显示「暂无」占位但容器仍然接收拖放。
+- **文件**：`Web/src/components/dorm/DormGrid.vue`
+- **关键实现**：
+  - 每个 `n-timeline-item` 的内容区就是一个 `<draggable>`。
+  - 歌曲行只保留小拖拽把手 `.drag-handle` 作为拖拽触发点。
+  - `vuedraggable` `group="dorm-songs"` 保持跨容器拖拽。
+  - 给空容器加 `empty-slot-placeholder` 与 `min-height` 样式。
+
+### 1.4 输入框无法正常输入的修复
+- 若因 `delay`/`distance` 或 `filter` 配置导致输入框焦点/拖拽冲突，需：
+  - 给输入框加 `.no-drag` 类。
+  - 取消整行拖拽后，该问题大概率消失；如仍出现，将 draggable 的 `delay` 调大或移除 `distance`。
+
+### 1.5 输入框右侧按钮改为「单首歌时段设置」
+- **当前误解**：该按钮被做成了打开全局 `TimeSlotModal`。
+- **正确需求**：点击后弹出选择框，设置**当前这首歌**应属于哪个 `timeSlotId`。
+- **实现**：
+  - 文件：`Web/src/components/dorm/DormGrid.vue`
+  - 移除打开 `TimeSlotModal` 的时钟按钮逻辑。
+  - 在歌曲行输入框右侧增加一个下拉选择按钮或 `n-select`（可做成 `n-popover` 内嵌 `n-select`），选项为当天所有时段 + 「未分配」。
+  - 选择后调用 `songsStore.updateSong(song.id, { timeSlotId })` 并刷新 `slotLists`。
+  - 保留删除按钮在最右侧。
+
+### 1.6 全局时段配置入口保留
+- 右下角的 `SettingsFab` 仍打开 `TimeSlotModal`（全局时段配置），不受影响。
+
+### 1.7 状态实时同步
+- 所有歌曲的增删改（包括导入面板内删除）都应通过 `useSongsStore` 统一更新本地数组，确保 DormGrid、ImportExistingSongs、日历/统计等各处实时一致。
+- 避免多处维护本地副本导致不同步。
+
+## 2. 歌单导入面板（SongImportPanel）
+
+### 2.1 移除日历视图
+- 删除 `CalendarGrid` 与 `showCalendar` 切换逻辑。
+- 删除「返回日历」按钮。
+- 面板由 `date` prop 直接决定导入日期。
+
+### 2.2 当日已点歌曲处增加删除按钮
+- 文件：`Web/src/components/song-import/ImportExistingSongs.vue`
+- 在每首已存在歌曲的试听按钮旁增加删除按钮，点击调用 `songsStore.deleteSong(song.id)`。
+
+### 2.3 默认时段
+- 面板接收 `defaultSlotId` prop，新导入歌曲默认分配到该时段（已在 `useFileProcessor` 支持）。
+
+## 3. 歌单导出（Export / useExportImage）
+
+### 3.1 序号作为标注
+- 文件：`Web/src/composables/useExportImage.ts`、`Web/src/utils/playlistTable.ts`
+- 将 `①②③` 从歌名字符串中拆分出来，渲染为独立的 `<span class="circled-number">`。
+- 结构示例：
+  ```html
+  <div class="song-with-number">
+    <span class="circled-number">①</span>
+    <span class="song-title">歌名</span>
+  </div>
+  ```
+- CSS 中控制 `circled-number` 的字号、颜色、间距，使其不影响标题排版。
+
+### 3.2 支持 `\n` 换行
+- 在 `formatExportTitle` 中保留 `\n → <br>` 逻辑。
+- 对 `song-title` 容器使用 `white-space: normal`，确保 `<br>` 生效。
+
+### 3.3 中文分词
+- 保留 `segmentit` 分词并在词组间插入零宽空格，配合 `word-break: keep-all`。
+
+## 4. 整理页（/organize）
+
+### 4.1 多选改单选（最多一周）
+- 文件：`Web/src/views/Organize.vue`
+- `selectedWeeks` 从数组改为单个 `number | null`。
+- 周选择器（或 YearSelect + 周列表）改为单选模式。
+
+### 4.2 预览表格复用简约歌单组件
+- 文件：`Web/src/views/Organize.vue`
+- 废弃当前 `v-html="tableHTMLForWeek(week)"` 的自定义 HTML 方式。
+- 新建或复用 `DormPlaylistTable.vue` 组件，基于 `buildDormTableHTML` 逻辑但用 Vue 模板实现，支持响应式更新。
+- 该组件也可在 Export 简约预览中复用。
+
+### 4.3 状态全局化
+- Organize 的选中周、目标目录等状态如需跨组件通信，优先使用 Pinia store 或 provide/inject，避免 props drilling。
+
+## 5. 穿梭框（WeekTransferPanel）
+
+### 5.1 删除「全选」功能
+- 文件：`Web/src/components/export/WeekTransferPanel.vue`
+- 移除每周折行上的全选复选框与相关逻辑（`isWeekChecked`、`toggleWeek` 等）。
+- 保留单日选择。
+
+### 5.2 可选年份改为可选日期
+- 将 YearSelect 替换为日期选择器或日期范围选择器，穿梭框数据源从「按年分组的天」改为「按日期直接选择」。
+- 具体交互待用户确认：是日期范围选择后生成日期列表，还是直接在穿梭框中按日期选择？
+
+## 6. 设置文案
+
+### 6.1 settings.advancedSettings → "高级设置"
+- 文件：`Web/src/locales/zh-CN.json`、`Web/src/locales/en.json`
+- 将 `settings.advancedSettings` 的文案从当前值改为「高级设置」。
+
+## 7. 热点功能精简
+
+### 7.1 完全移除热点功能
+- 文件：`Web/src/views/Mobile.vue`、`GoServer/hotspot/`、`GoServer/handlers/network.go` 或相关 handler、`GoServer/routes/routes.go`
+- 删除 Mobile.vue 中开启热点的模态框、状态轮询与按钮。
+- 删除后端 `/api/hotspot` 路由、`HotspotHandler` 及 `GoServer/hotspot/` 整目录。
+- 删除前端 `api/hotspot.ts`（如存在）及相关调用。
+
+### 7.2 合并手动打开电脑热点按钮
+- 将「手动打开电脑热点」按钮功能直接移到「打开电脑热点」按钮中，点击即执行（可能需要 UAC）。
+- 删除无用的确认/说明模态框。
+
+## 8. 侧边栏与入口互换
+
+### 8.1 手机点歌入口移到侧边栏
+- 文件：`Web/src/views/AppLayout.vue`
+- 将 `/mobile` 加入 `routeMenuOptions`（图标 `Phone`）。
+
+### 8.2 音频预览入口移到左下角 FAB
+- 将当前条件显示的侧边栏「音频预览」菜单项移除。
+- 在左下角（原手机点歌 FAB 位置）显示音频预览按钮（图标 `Music`）。
+- 显示逻辑保持：仅当 `player.currentFile.value && !player.isVisible.value` 时显示。
+
+### 8.3 动画优化
+- 文件：`Web/src/components/common/AudioPlayerWidget.vue`、`Web/src/composables/useAudioPlayer.ts`、`Web/src/views/AppLayout.vue`
+- 音频预览窗口打开时，从音频预览按钮位置播放展开动画（CSS transform/scale/opacity 或 naive-ui `n-collapse-transition`）。
+- 关闭时播放收缩动画回到按钮位置。
+- 建议用 CSS transition 控制 widget 的 `transform` 和 `opacity`，并通过 JS 计算起始/结束位置。
+
+## 9. 解密方案评估
+
+### 9.1 评估 https://git.um-react.app/um/lib_um_crypto_rust
+- **步骤**：先 clone 该仓库到本地进行评估。
+- **评估项**：
+  - 是否提供 WASM/CLI 接口，可直接在浏览器或后端使用。
+  - 解密效率（CPU/内存/耗时）是否优于现有 `unlock-music.dev/cli`。
+  - 支持的格式范围是否更广或更稳定。
+  - 集成成本（构建链、WASM 体积、授权协议）。
+- **结论**：若全面优于现有方案，则替换；否则保持现状。
+- **可能落地**：
+  - 若 Rust 提供 CLI：替换 `GoServer/converter/ncm.go` 中的调用。
+  - 若提供 WASM：在 um-react 或前端直接使用，减少后端依赖。
+
+## 10. 通用原则
+
+### 10.1 状态实时同步
+- 优先通过 `useSongsStore` 等 Pinia store 维护唯一数据源。
+- 本地组件副本（如 `editingSongs`、`slotLists`）应在 store 更新后自动同步，避免手动维护。
+- 删除/新增操作后主动调用 `fetchSongs` 或依赖 store 响应式更新。
+
+### 10.2 全局声明方便通讯
+- 新增需要在多组件间共享的状态，优先放入现有 store 或新建 store。
+- 对于跨层级较深的局部状态，使用 `provide/inject`。
+- 避免事件总线或大量 prop drilling。
+
+## 11. 验证清单
+
+- [ ] `/song/import` 路由已删除，无法直接访问。
+- [ ] 宿舍页默认显示下周。
+- [ ] 点击「添加歌曲」在宿舍页内打开导入面板，且面板日期正确。
+- [ ] 导入面板无日历视图、无返回日历按钮。
+- [ ] 歌曲行前有小拖拽把手，可拖到任意时段（含空时段）。
+- [ ] 输入框可正常输入。
+- [ ] 输入框右侧按钮可设置单首歌的时段。
+- [ ] 删除/新增歌曲后各组件实时同步。
+- [ ] 导出图片序号以独立标注形式展示，不影响排版。
+- [ ] 导出标题支持 `\n` 换行。
+- [ ] 穿梭框无全选功能。
+- [ ] /organize 周选择为单选，预览复用简约歌单组件。
+- [ ] settings.advancedSettings 显示为「高级设置」。
+- [ ] 热点按钮逻辑已合并，无用模态框已删除。
+- [ ] 手机点歌入口在侧边栏，音频预览入口在左下角 FAB。
+- [ ] 音频预览窗口有打开/关闭动画。
+- [ ] `npm run type-check` 通过。
+- [ ] `npm run test` 通过。
+- [ ] `python build.py --no-mirror` 构建成功。
+
+## 12. 待用户确认
+
+1. **穿梭框日期选择**：是期望日期范围选择器，还是直接在穿梭框中按单个日期选择？
+2. **Rust 解密库**：是否有访问权限或已有的调研结论？是否需要先 clone 评估？
+3. **导入面板形态**：偏好 `n-drawer` 侧滑面板还是 `n-modal` 弹窗？
+4. **热点后端 API**：精简后是否完全删除 `/api/hotspot` 相关后端代码？

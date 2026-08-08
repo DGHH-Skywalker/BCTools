@@ -14,7 +14,14 @@
               @update:value="(v: string | null) => $emit('update-slot', song.id, v || '')"
             />
           </n-space>
-          <n-button v-if="song.filePath" size="tiny" @click="$emit('preview', song)">{{ t('common.listen') }}</n-button>
+          <n-space align="center">
+            <n-button v-if="song.filePath" size="tiny" @click="$emit('preview', song)">{{ t('common.listen') }}</n-button>
+            <n-button size="tiny" type="error" @click="$emit('delete-song', song.id)">
+              <template #icon>
+                <Delete theme="outline" :size="14" :strokeWidth="3" />
+              </template>
+            </n-button>
+          </n-space>
         </n-space>
       </n-list-item>
     </n-list>
@@ -23,6 +30,7 @@
 
 <script setup lang="ts">
 import { useI18n } from "../../i18n"
+import { Delete } from "@icon-park/vue-next"
 import type { Song } from "../../api/types"
 import type { SelectOption } from "naive-ui"
 
@@ -38,5 +46,6 @@ defineProps<{
 defineEmits<{
   (e: "preview", song: Song): void
   (e: "update-slot", songId: number, slotId: string): void
+  (e: "delete-song", songId: number): void
 }>()
 </script>

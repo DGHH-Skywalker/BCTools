@@ -53,14 +53,6 @@ export interface NetworkInfo {
   url: string
 }
 
-export interface HotspotStatus {
-  status: "idle" | "starting" | "started" | "failed"
-  ssid: string
-  password: string
-  message: string
-  fallback: string
-}
-
 export interface ImportResult {
   inserted: number
   skipped: number

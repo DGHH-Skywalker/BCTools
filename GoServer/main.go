@@ -20,7 +20,6 @@ import (
 	"broadcast-tool/browser"
 	"broadcast-tool/converter"
 	"broadcast-tool/handlers"
-	"broadcast-tool/hotspot"
 	"broadcast-tool/internal/binembed"
 	"broadcast-tool/internal/repo"
 	"broadcast-tool/internal/version"
@@ -239,10 +238,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// 8. Mobile hotspot manager
-	hotspotMgr := hotspot.NewManager(appDataDir)
-
-	// 9. API routes
+	// 8. API routes
 	routes.RegisterRoutes(r, routes.HandlerSet{
 		Songs:    handlers.NewSongHandler(songStore, snapshotStore),
 		Files:    handlers.NewFileHandler(appDataDir, settingsStore, conv),
@@ -250,7 +246,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) {
 		Settings: handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
 		Snapshot: handlers.NewSnapshotHandler(snapshotStore),
 		Update:   handlers.NewUpdateHandler(settingsStore),
-		Network:  handlers.NewNetworkHandler(port, hotspotMgr),
+		Network:  handlers.NewNetworkHandler(port),
 		System:   handlers.NewSystemHandler(appDataDir, version.Version),
 		Decrypt:  handlers.NewDecryptHandler(appDataDir),
 	})

@@ -76,6 +76,7 @@
   },
   "dormManage": {
     "title": "Dorm Playlist",
+    "importSongs": "Import Songs",
     "importXlsx": "Import xlsx",
     "exportXlsx": "Export xlsx",
     "importResult": "Imported {inserted}, skipped {skipped}, {errors} errors",
@@ -167,16 +168,8 @@
   },
   "mobile": {
     "title": "Open this tool on your phone",
-    "openHotspot": "Open Mobile Hotspot",
-    "hotspotModalTitle": "Mobile Hotspot",
-    "startingHotspot": "Starting hotspot...",
-    "hotspotReady": "Hotspot is on. Scan the QR code with your phone to connect",
-    "hotspotFailed": "Failed to start hotspot",
-    "hotspotIdle": "Hotspot is not started",
     "appUrlTitle": "Open this tool on your phone",
     "sameNetworkTip": "Your phone and computer should be on the same network, otherwise the phone cannot connect to the backend service",
-    "password": "Password",
-    "openSystemSettings": "Open System Settings",
     "close": "Close",
     "mobileWarning": "This feature is usually used on a computer. Are you sure?",
     "confirmEnter": "Enter",
@@ -229,7 +222,8 @@
     "duplicateWarning": "Possible duplicate — “{title}” already exists on {date}. Please verify.",
     "unassigned": "Unassigned",
     "editSlotTime": "Click to edit time",
-    "dragSort": "Drag to reorder"
+    "dragSort": "Drag to reorder",
+    "assignSlot": "Set slot"
   },
   "guide": {
     "title": "User Guide",

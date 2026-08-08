@@ -20,7 +20,7 @@ export interface ProcessingFile {
   duplicateWarnings?: Song[]
 }
 
-export function useFileProcessor(selectedDateRef: { value: string }) {
+export function useFileProcessor(selectedDateRef: { value: string }, defaultTimeSlotIdRef?: { value: string | null | undefined }) {
   const songsStore = useSongsStore()
   const settingsStore = useSettingsStore()
   const processingFiles = reactive<ProcessingFile[]>([])
@@ -144,13 +144,19 @@ export function useFileProcessor(selectedDateRef: { value: string }) {
 
       if (selectedDateRef.value && item.songTitle) {
         try {
-          const song = await createSong({
+          const payload: any = {
             type: "dorm",
             date: selectedDateRef.value,
             title: item.songTitle,
             filePath: result.tempFileName,
-          })
+          }
+          const defaultSlot = defaultTimeSlotIdRef?.value
+          if (defaultSlot) {
+            payload.timeSlotId = defaultSlot
+          }
+          const song = await createSong(payload)
           item.songId = song.id
+          item.timeSlotId = defaultSlot || null
           songsStore.dormSongs.push(song)
         } catch (err: any) {
           item.status = "error"

@@ -10,18 +10,19 @@ import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvid
 // Mock songs API
 vi.mock("@/api/songs", () => {
   const today = new Date()
-  const y = today.getFullYear()
-  const m = String(today.getMonth() + 1).padStart(2, "0")
-  const d = String(today.getDate()).padStart(2, "0")
-  const todayStr = `${y}-${m}-${d}`
-  const jsDay = today.getDay()
+  const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const y = nextWeek.getFullYear()
+  const m = String(nextWeek.getMonth() + 1).padStart(2, "0")
+  const d = String(nextWeek.getDate()).padStart(2, "0")
+  const nextWeekStr = `${y}-${m}-${d}`
+  const jsDay = nextWeek.getDay()
   const weekday = jsDay === 0 ? "周日" : ["周日","周一","周二","周三","周四","周五","周六"][jsDay]
   return {
     fetchSongs: vi.fn(async (type: string) => {
       if (type === "dorm") {
         return [
-          { id: 1, date: todayStr, weekday, title: "测试歌曲A", artist: "", remark: "", filePath: "/songs/a.mp3", timeSlotId: "slot-1", createdAt: "" },
-          { id: 2, date: todayStr, weekday, title: "测试歌曲B", artist: "", remark: "", filePath: "", timeSlotId: null, createdAt: "" },
+          { id: 1, date: nextWeekStr, weekday, title: "测试歌曲A", artist: "", remark: "", filePath: "/songs/a.mp3", timeSlotId: "slot-1", createdAt: "" },
+          { id: 2, date: nextWeekStr, weekday, title: "测试歌曲B", artist: "", remark: "", filePath: "", timeSlotId: null, createdAt: "" },
         ]
       }
       return []
@@ -97,7 +98,7 @@ describe("DormManage (integrated page)", () => {
     setActivePinia(createPinia())
   })
 
-  it("mounts and renders songs for the current week without throwing", async () => {
+  it("mounts and renders songs for the next week without throwing", async () => {
     const errors: string[] = []
     const origError = console.error
     console.error = (...args: any[]) => {
@@ -143,7 +144,7 @@ describe("DormManage (integrated page)", () => {
     console.error = origError
 
     const html = wrapper.html()
-    // today's songs should render
+    // next week's songs should render
     expect(html).toContain("测试歌曲A")
     expect(html).toContain("测试歌曲B")
     // no Vue runtime errors
