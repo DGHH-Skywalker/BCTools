@@ -1,0 +1,75 @@
+@font-face {
+  font-family: 'JiangxiZhuokai';
+  src: url('/fonts/江西拙楷3.0.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* Base reset - intentionally minimal because Naive UI handles most resets */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Utility helpers for layout primitives */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.h-full {
+  height: 100%;
+}
+
+/* Page spacing helpers */
+.page-container {
+  padding: var(--page-padding);
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+}
+
+.page-container-lg {
+  max-width: var(--page-max-width-lg);
+}
+
+.page-container-xl {
+  max-width: var(--page-max-width-xl);
+}

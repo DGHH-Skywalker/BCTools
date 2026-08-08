@@ -1,0 +1,19 @@
+// installer.rc - Resource script for BCTools setup
+#include "../src/resource.h"
+
+// Application icon
+IDI_APP_ICON ICON "icon-bc.ico"
+
+// Logo image
+IDR_LOGO_PNG RCDATA "logo.png"
+
+// Embedded Chinese fonts (loaded via AddFontMemResourceEx at runtime)
+IDR_FONT_JIANGXI RCDATA "font_jiangxi_zhuokai.ttf"
+IDR_FONT_FANGZHENG RCDATA "font_fangzheng_yansong.ttf"
+
+// Per-monitor DPI awareness manifest
+1 RT_MANIFEST "app.manifest"
+
+// Application binaries (copied by build script)
+IDR_BCTOOLS_EXE     RCDATA "bctools.exe"
+IDR_BCTOOL_DEV_EXE  RCDATA "bctool_dev.exe"

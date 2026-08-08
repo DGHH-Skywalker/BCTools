@@ -1,0 +1,84 @@
+:root {
+  /* Primary palette */
+  --color-primary: #0086C3;
+  --color-primary-hover: #339fd2;
+  --color-primary-pressed: #006fa2;
+  --color-primary-light: rgba(0, 134, 195, 0.1);
+
+  /* Semantic colors */
+  --color-warning: #d4a017;
+  --color-warning-light: rgba(212, 160, 23, 0.12);
+  --color-error: #e74c3c;
+  --color-error-light: rgba(231, 76, 60, 0.12);
+  --color-success: #27ae60;
+
+  /* Neutral colors */
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #666666;
+  --color-text-muted: #999999;
+  --color-bg: #ffffff;
+  --color-bg-light: #f5f7fa;
+  --color-border: #e0e0e0;
+  --color-border-dark: #dddddd;
+  --color-overlay: rgba(0, 0, 0, 0.45);
+
+  /* Export / poster specific */
+  --color-poster-bg: #1a1a1a;
+  --color-poster-text: #ffffff;
+  --color-poster-muted: #d7d7d7;
+  --color-poster-table-border: rgba(255, 255, 255, 0.85);
+  --color-poster-table-border-broadcast: #ffffff;
+
+  /* Spacing scale */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* Layout */
+  --page-max-width: 1000px;
+  --page-max-width-lg: 1200px;
+  --page-max-width-xl: 1600px;
+  --page-padding: var(--spacing-md);
+
+  /* Typography */
+  --font-title: 'JiangxiZhuokai', 'STKaiti', 'KaiTi', serif;
+  --font-song: 'FZYanSong', '方正颜宋简体', 'STSong', 'SimSun', 'Songti SC', serif;
+  --font-slot: 'FZXiaoBiaoSong', '方正小标宋简', 'STSong', 'SimSun', 'Songti SC', serif;
+  --font-body: 'HarmonyOS Sans SC', 'HarmonyOS Sans', 'DengXian', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font-fangsong: 'FangSong_GB2312', '仿宋_GB2312', 'FangSong', 'STFangsong', serif;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 24px;
+  --radius-2xl: 40px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
+
+  /* App specific */
+  --theme-color: var(--color-primary);
+  --theme-color-light: rgba(0, 134, 195, 0.25);
+  --sider-width: 200px;
+  --sider-collapsed-width: 64px;
+  --header-height: 49px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text: #f0f0f0;
+    --color-bg: #121212;
+    --color-bg-light: #1e1e1e;
+    --color-border: #333333;
+    --color-border-dark: #444444;
+  }
+}

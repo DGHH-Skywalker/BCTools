@@ -2,11 +2,17 @@
 node_modules/
 
 # 构建产物
-frontend/dist/
-backend/embed/dist/
-backend/broadcast-tool.exe
+Web/dist/
+Web/um-react/dist/
+Web/scripts/__pycache__/
+GoServer/embed/dist/
+GoServer/embed/um-react/
+GoServer/broadcast-tool.exe
 broadcast-tool.exe
 dist/
+installer/obj/
+installer/setup.exe
+.corepack-shims/
 
 # 可执行文件与压缩包
 *.exe
@@ -39,3 +45,7 @@ icon.ico
 build_stdout.txt
 build_stderr.txt
 build*.log
+
+# 精简版 ffmpeg 构建产物（单独仓库/工具链，可选追踪）
+# GoServer/ffmpeg_bctools_mini/src/
+# GoServer/ffmpeg_bctools_mini/dist/

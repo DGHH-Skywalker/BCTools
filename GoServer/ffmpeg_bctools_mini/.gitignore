@@ -1,0 +1,17 @@
+# 构建中间产物与输出
+src/
+dist/
+build/
+*.log
+
+# 临时测试样本
+test_samples/
+test_out/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
