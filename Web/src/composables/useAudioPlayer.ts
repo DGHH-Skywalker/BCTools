@@ -11,20 +11,78 @@ const error = ref<string>("")
 const initialPosition = ref<{ x: number; y: number } | null>(null)
 const originRect = ref<DOMRect | null>(null)
 
+function updateMediaSession() {
+  if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+  const ms = navigator.mediaSession
+  if (!currentFile.value) {
+    ms.metadata = null
+    ms.playbackState = "none"
+    return
+  }
+  ms.metadata = new MediaMetadata({
+    title: currentTitle.value || "未知歌曲",
+    artist: "",
+    album: "",
+    artwork: [],
+  })
+  ms.playbackState = isPlaying.value ? "playing" : "paused"
+}
+
 const audio = new Audio()
 audio.preload = "metadata"
+
+let mediaSessionActionsRegistered = false
+
+function registerMediaSessionActions(actions: {
+  resume: () => void
+  pause: () => void
+  stop: () => void
+  seek: (time: number) => void
+}) {
+  if (mediaSessionActionsRegistered) return
+  if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return
+  mediaSessionActionsRegistered = true
+  const ms = navigator.mediaSession
+  try {
+    ms.setActionHandler("play", () => actions.resume())
+  } catch {}
+  try {
+    ms.setActionHandler("pause", () => actions.pause())
+  } catch {}
+  try {
+    ms.setActionHandler("stop", () => actions.stop())
+  } catch {}
+  try {
+    ms.setActionHandler("seekto", (details) => {
+      if (details.seekTime != null) actions.seek(details.seekTime)
+    })
+  } catch {}
+  try {
+    ms.setActionHandler("seekbackward", (details) => {
+      actions.seek(audio.currentTime - (details.seekOffset || 10))
+    })
+  } catch {}
+  try {
+    ms.setActionHandler("seekforward", (details) => {
+      actions.seek(audio.currentTime + (details.seekOffset || 10))
+    })
+  } catch {}
+}
 
 audio.addEventListener("ended", () => {
   isPlaying.value = false
   currentTime.value = 0
-})
-
-audio.addEventListener("pause", () => {
-  isPlaying.value = false
+  updateMediaSession()
 })
 
 audio.addEventListener("play", () => {
   isPlaying.value = true
+  updateMediaSession()
+})
+
+audio.addEventListener("pause", () => {
+  isPlaying.value = false
+  updateMediaSession()
 })
 
 audio.addEventListener("timeupdate", () => {
@@ -72,6 +130,7 @@ export function useAudioPlayer() {
     currentFile.value = filePath
     currentTitle.value = title
     isVisible.value = true
+    updateMediaSession()
   }
 
   function pause() {
@@ -93,6 +152,9 @@ export function useAudioPlayer() {
     currentTime.value = 0
     duration.value = 0
     error.value = ""
+    originRect.value = null
+    initialPosition.value = null
+    updateMediaSession()
   }
 
   function seek(time: number) {
@@ -100,8 +162,17 @@ export function useAudioPlayer() {
     audio.currentTime = Math.max(0, Math.min(time, duration.value || time))
   }
 
+  registerMediaSessionActions({ resume, pause, stop, seek })
+
   function hide() {
     isVisible.value = false
+  }
+
+  function close() {
+    hide()
+    originRect.value = null
+    initialPosition.value = null
+    updateMediaSession()
   }
 
   function show(source?: { x: number; y: number } | DOMRect) {
@@ -143,6 +214,7 @@ export function useAudioPlayer() {
     stop,
     seek,
     hide,
+    close,
     show,
     setPosition,
     toggle,

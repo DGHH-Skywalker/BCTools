@@ -50,9 +50,13 @@
             <n-button
               size="small"
               :disabled="!player.currentFile.value"
+              :title="player.isPlaying.value ? '暂停' : '播放'"
               @click="togglePlay"
             >
-              {{ player.isPlaying.value ? '暂停' : '播放' }}
+              <template #icon>
+                <Pause v-if="player.isPlaying.value" theme="outline" :size="14" :strokeWidth="3" />
+                <Play v-else theme="outline" :size="14" :strokeWidth="3" />
+              </template>
             </n-button>
             <n-button size="small" :disabled="!player.currentFile.value" @click="stopAndClose">停止</n-button>
           </n-space>
@@ -65,7 +69,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed } from "vue"
 import { NEllipsis, NText } from "naive-ui"
-import { Close } from "@icon-park/vue-next"
+import { Close, Play, Pause } from "@icon-park/vue-next"
 import { useAudioPlayer, formatDuration } from "../../composables/useAudioPlayer"
 
 const player = useAudioPlayer()
@@ -97,6 +101,7 @@ const position = ref(defaultPosition())
 const wrapperRef = ref<HTMLElement | null>(null)
 const isClosing = ref(false)
 const transitionEnabled = ref(false)
+const closeTimeout = ref<number | null>(null)
 const transformStyle = ref({
   transform: "translate(0,0) scale(1)",
   opacity: 1,
@@ -150,15 +155,19 @@ function animateOpen() {
 function closeAnimated() {
   const origin = player.originRect.value
   if (!origin) {
-    player.hide()
+    player.close()
     return
   }
   isClosing.value = true
   transitionEnabled.value = true
   transformStyle.value = computeOriginTransform(origin)
-  window.setTimeout(() => {
-    player.hide()
+  if (closeTimeout.value !== null) {
+    window.clearTimeout(closeTimeout.value)
+  }
+  closeTimeout.value = window.setTimeout(() => {
+    player.close()
     isClosing.value = false
+    closeTimeout.value = null
   }, 260)
 }
 
@@ -222,6 +231,10 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("resize", onResize)
   stopDrag()
+  if (closeTimeout.value !== null) {
+    window.clearTimeout(closeTimeout.value)
+    closeTimeout.value = null
+  }
 })
 
 function togglePlay() {

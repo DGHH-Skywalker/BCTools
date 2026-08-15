@@ -47,11 +47,11 @@ vi.mock("@/composables/useAudioPlayer", () => ({
 vi.mock("vuedraggable", () => ({
   default: defineComponent({
     name: "Draggable",
-    props: ["modelValue", "itemKey", "handle", "animation", "disabled"],
-    emits: ["update:modelValue"],
+    props: ["modelValue", "list", "itemKey", "handle", "animation", "disabled"],
+    emits: ["update:modelValue", "update:list"],
     setup(props, { slots }) {
       return () => {
-        const items = (props.modelValue as any[]) || []
+        const items = (props.list as any[]) || (props.modelValue as any[]) || []
         return h("div", items.map((item) => slots.item?.({ element: item })))
       }
     },
@@ -70,7 +70,7 @@ dayjs.extend(isoWeek)
 const globalStubs = {
   global: {
     plugins: [naive],
-    stubs: { "icon-park": true, TimeSlotModal: true },
+    stubs: { "icon-park": true },
   },
 }
 

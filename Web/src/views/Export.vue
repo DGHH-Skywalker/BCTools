@@ -187,7 +187,7 @@ const renderTargetList: TransferRenderSourceList = ({ onCheck, checkedOptions, p
 async function exportPlaylist(type: SongType) {
   const dates = exportStore.selectedDates
   if (dates.length === 0) return
-  if (type === "dorm" && settingsStore.timeSlots.length === 0) {
+  if (type === "dorm" && (settingsStore.timeSlots || []).length === 0) {
     message.warning(t("export.noSlots"))
     return
   }

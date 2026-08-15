@@ -6,7 +6,6 @@ import * as settingsApi from "../api/settings"
 export const useSettingsStore = defineStore("settings", () => {
   const timeSlots = ref<TimeSlot[]>([])
   const allowTemplateJS = ref(false)
-  const autoStartEnabled = ref(true)
   const silentPlaceholderDuration = ref(30)
   const version = ref("5.5.0.0")
   const downloadUrl = ref("")
@@ -22,7 +21,6 @@ export const useSettingsStore = defineStore("settings", () => {
       const s: Settings = await settingsApi.getSettings()
       timeSlots.value = s.timeSlots || []
       allowTemplateJS.value = s.allowTemplateJS
-      autoStartEnabled.value = s.autoStartEnabled ?? true
       silentPlaceholderDuration.value = s.silentPlaceholderDuration || 30
       version.value = s.version
       downloadUrl.value = s.downloadUrl
@@ -45,7 +43,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   return {
-    timeSlots, allowTemplateJS, autoStartEnabled,
+    timeSlots, allowTemplateJS,
     silentPlaceholderDuration, version, downloadUrl, adminPasswordHint,
     locale, broadcastColumnMap, duplicateCheckDays, loading, fetchSettings, updateSettings,
   }

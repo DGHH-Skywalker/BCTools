@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"broadcast-tool/autostart"
 	"broadcast-tool/models"
 	"broadcast-tool/store/deletedlogstore"
 	"broadcast-tool/store/settingstore"
@@ -14,7 +13,7 @@ import (
 )
 
 // SettingsUpdateService encapsulates the business logic for updating settings,
-// including time-slot deletion side effects, password changes and auto-start sync.
+// including time-slot deletion side effects and password changes.
 type SettingsUpdateService struct {
 	Settings   *settingstore.SettingsStore
 	Songs      *songstore.SongStore
@@ -97,14 +96,6 @@ func (s *SettingsUpdateService) UpdateAdminPassword(password string) error {
 		return fmt.Errorf("保存密码失败")
 	}
 	return nil
-}
-
-// ApplyAutoStart applies the auto-start registry setting if the field is present.
-func (s *SettingsUpdateService) ApplyAutoStart(enabled *bool) error {
-	if enabled == nil {
-		return nil
-	}
-	return autostart.Apply(*enabled)
 }
 
 func deletedSlotIDs(oldSlots, newSlots []models.TimeSlot) map[string]bool {

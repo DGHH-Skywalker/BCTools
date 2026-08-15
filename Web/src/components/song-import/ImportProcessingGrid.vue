@@ -13,6 +13,13 @@
               </n-ellipsis>
             </n-space>
             <n-button v-if="file.status==='error'" size="small" class="conv-card-action" @click="$emit('retry', file)">{{ t("songImport.retry") }}</n-button>
+            <AudioPlayButton
+              v-if="file.status==='done' && file.tempFileName"
+              class="conv-card-action"
+              size="small"
+              :file-path="file.tempFileName"
+              :title="file.songTitle"
+            />
             <n-button v-if="file.status==='done'" size="small" type="error" class="conv-card-action" @click="$emit('delete', file)">{{ t("common.delete") }}</n-button>
           </n-space>
 
@@ -59,6 +66,7 @@
 
 <script setup lang="ts">
 import { useI18n } from "../../i18n"
+import AudioPlayButton from "../common/AudioPlayButton.vue"
 import type { ProcessingFile } from "../../composables/useFileProcessor"
 import type { SelectOption } from "naive-ui"
 

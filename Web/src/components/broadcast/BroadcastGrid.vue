@@ -12,10 +12,6 @@
             <n-button size="tiny" dashed @click="addSong(date, period.key)">+ {{ t("broadcast.addSong") }}</n-button>
           </n-space>
 
-          <n-space v-if="songsFor(date, period.key).length === 0" vertical style="width:100%;">
-            <n-text depth="3">{{ t("common.empty") }}</n-text>
-          </n-space>
-
           <n-space v-for="song in songsFor(date, period.key)" :key="song.id" align="center" style="width:100%;">
             <n-input
               :value="song.title"
@@ -24,14 +20,12 @@
               @update:value="(v: string) => updateTitle(song.id, v)"
               @blur="saveTitle(song.id, song.title)"
             />
-            <n-button
+            <AudioPlayButton
               v-if="song.filePath"
               size="tiny"
-              :type="player.currentFile.value === song.filePath ? 'primary' : 'default'"
-              @click="player.play(song.filePath, song.title)"
-            >
-              {{ player.currentFile.value === song.filePath ? t('common.pause') : t('common.listen') }}
-            </n-button>
+              :file-path="song.filePath"
+              :title="song.title"
+            />
             <n-button size="tiny" type="error" @click="removeSong(song.id)">
               <template #icon>
                 <Delete theme="outline" :size="14" :strokeWidth="3" />
@@ -48,8 +42,8 @@
 import { ref, computed, onMounted, watch } from "vue"
 import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
-import { useAudioPlayer } from "../../composables/useAudioPlayer"
 import { Delete } from "@icon-park/vue-next"
+import AudioPlayButton from "../common/AudioPlayButton.vue"
 import dayjs from "dayjs"
 import type { Song } from "../../api/types"
 
@@ -60,7 +54,6 @@ const props = defineProps<{
 
 const { t, weekdayName } = useI18n()
 const songsStore = useSongsStore()
-const player = useAudioPlayer()
 
 const editingSongs = ref<Song[]>([])
 

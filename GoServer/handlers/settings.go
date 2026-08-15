@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"broadcast-tool/models"
@@ -64,10 +63,6 @@ func (h *SettingsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := h.Settings.UpdateSettings(req); err != nil {
 		response.WriteInternalError(w, "保存设置失败")
 		return
-	}
-
-	if err := h.settingsService.ApplyAutoStart(req.AutoStartEnabled); err != nil {
-		log.Printf("WARNING: failed to apply auto-start setting: %v", err)
 	}
 
 	response.WriteJSON(w, http.StatusOK, h.Settings.GetSettings())

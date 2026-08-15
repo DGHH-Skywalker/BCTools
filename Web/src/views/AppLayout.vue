@@ -6,7 +6,7 @@
       </div>
     </n-layout-sider>
     <n-layout style="height:100vh;">
-      <n-layout-header v-if="config.languageSwitchEnabled || (isMobile && !isHome)" style="padding:8px 16px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;height:49px;">
+      <n-layout-header v-if="config.languageSwitchEnabled || (isMobile && !isHome)" style="padding:8px 16px;background:var(--color-bg);border-bottom:1px solid var(--color-border);display:flex;align-items:center;height:49px;">
         <n-button v-if="isMobile && !isHome" text style="margin-right:auto;" @click="mobileMenuOpen = true">
           <template #icon>
             <HamburgerButton theme="outline" :size="20" :strokeWidth="3" />
@@ -76,20 +76,29 @@ const routeMenuOptions: MenuOption[] = [
   { key: "/broadcast", label: () => t("nav.broadcast"), icon: () => h(Broadcast, iconProps as any) },
   { key: "/export", label: () => t("nav.export"), icon: () => h(Export, iconProps as any) },
   { key: "/organize", label: () => t("nav.organize"), icon: () => h(FolderOpen, iconProps as any) },
-  { key: "/decrypt", label: () => t("nav.decrypt"), icon: () => h(Key, iconProps as any) },
+  { key: "um-react", label: () => t("nav.decrypt"), icon: () => h(Key, iconProps as any) },
   { key: "/settings", label: () => t("nav.settings"), icon: () => h(Setting, iconProps as any) },
   { key: "/mobile", label: () => t("nav.mobile"), icon: () => h(Phone, iconProps as any) },
 ]
 const menuOptions = computed((): MenuOption[] => routeMenuOptions)
 
 const visibleMenuOptions = computed((): MenuOption[] => menuOptions.value)
-const activeKey = computed(() => route.path)
+const activeKey = computed(() => route.matched[0]?.path || route.path)
 const isHome = computed(() => route.path === "/home")
+// um-react 由后端 /um-react/* 托管的独立页面，只能在新标签页打开，不走前端路由
 function onMenuChange(key: string) {
+  if (key === "um-react") {
+    window.open("/um-react/", "_blank")
+    return
+  }
   router.push(key)
 }
 function onMobileMenuChange(key: string) {
   mobileMenuOpen.value = false
+  if (key === "um-react") {
+    window.open("/um-react/", "_blank")
+    return
+  }
   router.push(key)
 }
 function showAudioPreview(e: MouseEvent) {

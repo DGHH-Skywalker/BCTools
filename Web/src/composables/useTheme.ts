@@ -1,4 +1,5 @@
-import { ref } from "vue"
+import { ref, computed } from "vue"
+import { darkTheme } from "naive-ui"
 import { COLORS } from "../constants"
 
 export interface ThemeOverrides {
@@ -18,6 +19,26 @@ const themeOverrides = ref<ThemeOverrides>({
     primaryColorSuppl: COLORS.primary,
   },
 })
+
+const isDark = ref<boolean>(
+  typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: dark)").matches
+    : false,
+)
+
+const theme = computed(() => (isDark.value ? darkTheme : null))
+
+if (typeof window !== "undefined" && window.matchMedia) {
+  const mq = window.matchMedia("(prefers-color-scheme: dark)")
+  const listener = (e: MediaQueryListEvent) => {
+    isDark.value = e.matches
+  }
+  if (mq.addEventListener) {
+    mq.addEventListener("change", listener)
+  } else if ((mq as any).addListener) {
+    ;(mq as any).addListener(listener)
+  }
+}
 
 function hexToRgb(hex: string) {
   const v = hex.replace("#", "")
@@ -49,5 +70,5 @@ export function applyTheme(color: string) {
 }
 
 export function useTheme() {
-  return { themeOverrides, applyTheme, adjustColor }
+  return { themeOverrides, theme, isDark, applyTheme, adjustColor }
 }

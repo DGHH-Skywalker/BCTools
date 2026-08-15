@@ -15,6 +15,9 @@
         <n-text code class="mobile-url">{{ networkInfo?.url || '...' }}</n-text>
         <img v-if="networkInfo" class="mobile-qr" :src="`/api/network/qr?t=${qrTs}`" alt="App QR" />
         <n-text depth="3" class="mobile-tip">{{ t('mobile.sameNetworkTip') }}</n-text>
+        <n-button v-if="showHotspotSettings" type="primary" @click="openHotspotSettings">
+          {{ t('mobile.openHotspotSettings') }}
+        </n-button>
       </n-space>
     </n-card>
   </div>
@@ -24,11 +27,13 @@
 import { ref, onMounted, onUnmounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
+import { useTheme } from "../composables/useTheme"
 import { getNetworkInfo } from "../api/network"
 import type { NetworkInfo } from "../api/types"
 
 const { t } = useI18n()
 const router = useRouter()
+const { isDark } = useTheme()
 const networkInfo = ref<NetworkInfo | null>(null)
 const qrTs = ref(Date.now())
 let refreshTimer: number | null = null
@@ -43,9 +48,23 @@ const shouldWarn = isMobileUA() || (isTouchDevice() && !matchMedia("(pointer: fi
 const warningSkipped = ref(false)
 const showMobileWarning = computed(() => shouldWarn && !warningSkipped.value)
 
-const logoSrc = computed(() =>
-  matchMedia("(prefers-color-scheme: dark)").matches ? "/logo-white.png" : "/logo.png"
-)
+const logoSrc = computed(() => (isDark.value ? "/logo-white.png" : "/logo.png"))
+
+function isLocalHostname() {
+  const host = window.location.hostname
+  return host === "localhost" || host === "127.0.0.1" || host === "::1"
+}
+
+const showHotspotSettings = computed(() => {
+  if (!isLocalHostname()) return false
+  if (!networkInfo.value) return false
+  const info = networkInfo.value
+  return info.isLocalRequest && info.isWindows && (info.windowsVersion === "10" || info.windowsVersion === "11")
+})
+
+function openHotspotSettings() {
+  window.location.href = "ms-settings:network-mobilehotspot"
+}
 
 async function refreshNetworkInfo() {
   try {

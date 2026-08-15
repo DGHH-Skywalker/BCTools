@@ -9,7 +9,10 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/dorm/manage",
     component: AppLayout,
-    children: [{ path: "", component: () => import("../views/DormManage.vue"), meta: { title: "宿舍歌单" } }],
+    children: [
+      { path: "", component: () => import("../views/DormManage.vue"), meta: { title: "宿舍歌单" } },
+      { path: "slots", component: () => import("../views/DormTimeSlots.vue"), meta: { title: "时段配置" } },
+    ],
   },
   {
     path: "/broadcast",
@@ -32,21 +35,15 @@ const routes: RouteRecordRaw[] = [
     children: [{ path: "", component: () => import("../views/Mobile.vue"), meta: { title: "手机点歌" } }],
   },
   {
-    path: "/decrypt",
-    component: AppLayout,
-    children: [{ path: "", component: () => import("../views/Decrypt.vue"), meta: { title: "解密歌曲" } }],
-  },
-  {
     path: "/settings",
     component: AppLayout,
-    children: [{ path: "", component: () => import("../views/Settings.vue"), meta: { title: "软件设置" } }],
+    children: [
+      { path: "", component: () => import("../views/Settings.vue"), meta: { title: "软件设置" } },
+      { path: "guide", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } },
+    ],
   },
   { path: "/about-software", redirect: "/settings" },
-  {
-    path: "/guide",
-    component: AppLayout,
-    children: [{ path: "", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } }],
-  },
+  { path: "/guide", redirect: "/settings/guide" },
   {
     path: "/error",
     component: AppLayout,

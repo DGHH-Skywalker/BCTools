@@ -10,8 +10,6 @@
   </div>
 
   <div v-else class="organize-page">
-    <input ref="dirInput" type="file" webkitdirectory class="organize-dir-input" @change="onDirSelected" />
-
     <n-card class="organize-card">
       <n-space vertical size="large">
         <n-space align="center" wrap>
@@ -60,9 +58,10 @@
 import { ref, computed, onMounted } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
+import { useTheme } from "../composables/useTheme"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
-import { organizeFiles, fetchSilentMP3 } from "../api/files"
+import { organizeFiles, fetchSilentMP3, selectDir } from "../api/files"
 import { useMessage } from "naive-ui"
 import type { SelectOption } from "naive-ui"
 import dayjs from "dayjs"
@@ -74,6 +73,7 @@ import type { TimeSlot } from "../api/types"
 dayjs.extend(isoWeek)
 
 const router = useRouter()
+const { isDark } = useTheme()
 
 function isTouchDevice() {
   return "ontouchstart" in window || navigator.maxTouchPoints > 0
@@ -85,16 +85,13 @@ const shouldWarn = isMobileUA() || (isTouchDevice() && !matchMedia("(pointer: fi
 const warningSkipped = ref(false)
 const showMobileWarning = computed(() => shouldWarn && !warningSkipped.value)
 
-const logoSrc = computed(() =>
-  matchMedia("(prefers-color-scheme: dark)").matches ? "/logo-white.png" : "/logo.png"
-)
+const logoSrc = computed(() => (isDark.value ? "/logo-white.png" : "/logo.png"))
 
 const { t } = useI18n()
 const songsStore = useSongsStore()
 const settingsStore = useSettingsStore()
 const message = useMessage()
 
-const dirInput = ref<HTMLInputElement | null>(null)
 const targetDir = ref("")
 const targetDirName = ref("")
 const targetDirHandle = ref<FileSystemDirectoryHandle | null>(null)
@@ -168,29 +165,26 @@ function buildEntries(dates: string[]): { source: string; targetName: string }[]
   return entries
 }
 
-function dirFromFilePath(filePath: string): string {
-  return filePath.replace(/[\\/][^\\/]*$/, "")
-}
-
-function browse() {
-  dirInput.value?.click()
-}
-
-async function onDirSelected(e: Event) {
-  const files = (e.target as HTMLInputElement).files
-  if (!files || files.length === 0) {
+async function browse() {
+  // 1. 优先使用后端原生文件夹对话框（Windows 桌面环境）
+  try {
+    const path = await selectDir()
+    if (path) {
+      targetDir.value = path
+      targetDirName.value = path
+      targetDirHandle.value = null
+      copyMode.value = "backend"
+      return
+    }
+    // 用户取消
     copyMode.value = null
     return
+  } catch (err) {
+    console.log("Backend select-dir unavailable", err)
   }
 
-  const firstPath = (files[0] as any).path as string | undefined
-  if (firstPath) {
-    const dirPath = dirFromFilePath(firstPath)
-    targetDir.value = dirPath
-    targetDirName.value = dirPath
-    targetDirHandle.value = null
-    copyMode.value = "backend"
-  } else if ((window as any).showDirectoryPicker) {
+  // 2. Fallback: File System Access API
+  if ((window as any).showDirectoryPicker) {
     try {
       const handle = await (window as any).showDirectoryPicker()
       targetDirHandle.value = handle
@@ -198,21 +192,15 @@ async function onDirSelected(e: Event) {
       targetDir.value = ""
       copyMode.value = "frontend"
     } catch (err: any) {
-      if (err?.name === "AbortError") {
-        // ignore
-      } else {
+      if (err?.name !== "AbortError") {
         console.error(err)
         message.error(t("organize.selectFolderFailed"))
       }
       copyMode.value = null
     }
   } else {
-    message.error("当前浏览器不支持原生文件夹选择")
+    message.error("当前浏览器不支持文件夹选择")
     copyMode.value = null
-  }
-
-  if (dirInput.value) {
-    dirInput.value.value = ""
   }
 }
 
@@ -392,10 +380,6 @@ onMounted(async () => {
   padding: var(--spacing-md);
   max-width: 1000px;
   margin: 0 auto;
-}
-
-.organize-dir-input {
-  display: none;
 }
 
 .organize-card {

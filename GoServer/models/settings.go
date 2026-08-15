@@ -18,7 +18,6 @@ type Settings struct {
 	Locale                    string            `json:"locale"`
 	Version                   string            `json:"version"`
 	DownloadURL               string            `json:"downloadUrl"`
-	AutoStartEnabled          bool              `json:"autoStartEnabled"`
 	BroadcastColumnMap        map[string]string `json:"broadcastColumnMap"`
 	DuplicateCheckDays        int               `json:"duplicateCheckDays"`
 }
@@ -32,7 +31,6 @@ type PublicSettings struct {
 	Locale                    string            `json:"locale"`
 	Version                   string            `json:"version"`
 	DownloadURL               string            `json:"downloadUrl"`
-	AutoStartEnabled          bool              `json:"autoStartEnabled"`
 	BroadcastColumnMap        map[string]string `json:"broadcastColumnMap"`
 	DuplicateCheckDays        int               `json:"duplicateCheckDays"`
 }
@@ -46,7 +44,6 @@ type UpdateSettingsRequest struct {
 	AdminPasswordHint         *string            `json:"adminPasswordHint,omitempty"`
 	Locale                    *string            `json:"locale,omitempty"`
 	Confirmed                 bool               `json:"confirmed,omitempty"`
-	AutoStartEnabled          *bool              `json:"autoStartEnabled,omitempty"`
 	BroadcastColumnMap        *map[string]string `json:"broadcastColumnMap,omitempty"`
 	DuplicateCheckDays        *int               `json:"duplicateCheckDays,omitempty"`
 }

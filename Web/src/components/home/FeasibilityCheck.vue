@@ -2,24 +2,26 @@
   <div class="feasibility-check">
     <n-h2 style="text-align:center;font-family:var(--font-title);color:var(--theme-color);">{{ t("feasibilityCheck.title") }}</n-h2>
 
-    <n-grid cols="2 s:3 m:4" :x-gap="12" :y-gap="12" style="margin-top:16px;">
-      <n-grid-item v-for="item in items" :key="item.id">
-        <n-card class="check-card" size="small">
-          <n-space vertical align="center" style="text-align:center;">
-            <n-spin v-if="item.status === 'running'" size="small" />
-            <check-one v-else-if="item.status === 'pass'" theme="outline" :size="28" fill="#52c41a" />
-            <close-one v-else-if="item.status === 'fail'" theme="outline" :size="28" fill="#ff4d4f" />
-            <n-text strong>{{ item.name }}</n-text>
-            <n-text depth="3">{{ statusText(item.status) }}</n-text>
-          </n-space>
-        </n-card>
-      </n-grid-item>
-    </n-grid>
+    <div class="check-row-list">
+      <n-card v-for="item in items" :key="item.id" class="check-card" size="small">
+        <div class="check-card-inner">
+          <n-spin v-if="item.status === 'running'" size="small" />
+          <check-one v-else-if="item.status === 'pass'" class="check-icon check-icon-pass" theme="outline" :size="22" fill="#27ae60" />
+          <close-one v-else-if="item.status === 'fail'" class="check-icon check-icon-fail" theme="outline" :size="22" fill="#e74c3c" />
+          <n-icon v-else :size="22"><more-one /></n-icon>
+          <div class="check-text">
+            <n-text strong class="check-name">{{ item.name }}</n-text>
+            <n-text depth="3" class="check-status" :class="{ 'check-status-fail': item.status === 'fail' }">{{ statusText(item.status) }}</n-text>
+          </div>
+        </div>
+      </n-card>
+    </div>
 
     <n-p class="disclaimer">{{ t("feasibilityCheck.disclaimer") }}</n-p>
 
     <n-space justify="center" style="margin-top:16px;">
       <n-button size="large" @click="$emit('back')">{{ t("feasibilityCheck.back") }}</n-button>
+      <n-button size="large" :loading="checking" @click="runChecks">{{ t("feasibilityCheck.recheck") }}</n-button>
       <n-button type="primary" size="large" :loading="checking" @click="start">{{ t("feasibilityCheck.start") }}</n-button>
     </n-space>
 
@@ -40,7 +42,7 @@ import { ref, onMounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../../i18n"
 import { getSystemStatus } from "../../api/system"
-import { CheckOne, CloseOne } from "@icon-park/vue-next"
+import { CheckOne, CloseOne, MoreOne } from "@icon-park/vue-next"
 
 type CheckStatus = "idle" | "running" | "pass" | "fail"
 
@@ -55,14 +57,15 @@ const router = useRouter()
 const checking = ref(false)
 const showConfirm = ref(false)
 
+// 检测项说明：
+// - backend/ffmpeg/ffprobe 共用一次 /system/status 调用
+// - fileSelect（永远通过）与 localhost（与局域网点歌场景冲突）已移除
 const items = ref<CheckItem[]>([
   { id: "backend", name: t("feasibilityCheck.backend"), status: "idle" },
   { id: "ffmpeg", name: t("feasibilityCheck.ffmpeg"), status: "idle" },
   { id: "ffprobe", name: t("feasibilityCheck.ffprobe"), status: "idle" },
   { id: "localStorage", name: t("feasibilityCheck.localStorage"), status: "idle" },
   { id: "audio", name: t("feasibilityCheck.audio"), status: "idle" },
-  { id: "fileSelect", name: t("feasibilityCheck.fileSelect"), status: "idle" },
-  { id: "localhost", name: t("feasibilityCheck.localhost"), status: "idle" },
 ])
 
 const allPassed = computed(() => items.value.every((i) => i.status === "pass"))
@@ -79,21 +82,12 @@ function setStatus(id: string, status: CheckStatus) {
   if (item) item.status = status
 }
 
-async function checkBackend(): Promise<boolean> {
-  try {
-    await getSystemStatus()
-    return true
-  } catch {
-    return false
-  }
-}
-
-async function checkSystemBinaries(): Promise<{ ffmpeg: boolean; ffprobe: boolean }> {
+async function checkBackendAndBinaries(): Promise<{ backend: boolean; ffmpeg: boolean; ffprobe: boolean }> {
   try {
     const status = await getSystemStatus()
-    return { ffmpeg: status.ffmpegAvailable, ffprobe: status.ffprobeAvailable }
+    return { backend: true, ffmpeg: status.ffmpegAvailable, ffprobe: status.ffprobeAvailable }
   } catch {
-    return { ffmpeg: false, ffprobe: false }
+    return { backend: false, ffmpeg: false, ffprobe: false }
   }
 }
 
@@ -117,39 +111,20 @@ function checkAudio(): boolean {
   }
 }
 
-function checkFileSelect(): boolean {
-  const input = document.createElement("input")
-  input.type = "file"
-  return input.type === "file"
-}
-
-function checkLocalhost(): boolean {
-  const host = window.location.hostname
-  return host === "localhost" || host === "127.0.0.1" || host === "::1"
-}
-
 async function runChecks() {
   items.value.forEach((i) => { i.status = "running" })
   checking.value = true
 
-  const [backendOk, binaryOk] = await Promise.all([
-    checkBackend(),
-    checkSystemBinaries(),
+  const [server, storageOk, audioOk] = await Promise.all([
+    checkBackendAndBinaries(),
+    Promise.resolve(checkLocalStorage()),
+    Promise.resolve(checkAudio()),
   ])
-  setStatus("backend", backendOk ? "pass" : "fail")
-  setStatus("ffmpeg", binaryOk.ffmpeg ? "pass" : "fail")
-  setStatus("ffprobe", binaryOk.ffprobe ? "pass" : "fail")
-
-  const others = await Promise.all([
-    checkLocalStorage(),
-    checkAudio(),
-    checkFileSelect(),
-    checkLocalhost(),
-  ])
-  setStatus("localStorage", others[0] ? "pass" : "fail")
-  setStatus("audio", others[1] ? "pass" : "fail")
-  setStatus("fileSelect", others[2] ? "pass" : "fail")
-  setStatus("localhost", others[3] ? "pass" : "fail")
+  setStatus("backend", server.backend ? "pass" : "fail")
+  setStatus("ffmpeg", server.ffmpeg ? "pass" : "fail")
+  setStatus("ffprobe", server.ffprobe ? "pass" : "fail")
+  setStatus("localStorage", storageOk ? "pass" : "fail")
+  setStatus("audio", audioOk ? "pass" : "fail")
 
   checking.value = false
 }
@@ -180,11 +155,47 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
+/* 一行放下所有卡片：flex 布局，空间不足时才换行 */
+.check-row-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .check-card {
-  min-height: 120px;
+  flex: 1 1 0;
+  min-width: 140px;
+}
+
+.check-card-inner {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.check-icon {
+  flex-shrink: 0;
+}
+
+.check-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+.check-name {
+  font-size: 14px;
+}
+
+.check-status {
+  font-size: 12px;
+}
+
+.check-status-fail {
+  color: var(--color-error);
 }
 
 .disclaimer {
@@ -198,6 +209,10 @@ onMounted(() => {
 @media (max-width: 480px) {
   .feasibility-check {
     padding: 8px;
+  }
+
+  .check-card {
+    min-width: calc(50% - 6px);
   }
 }
 </style>

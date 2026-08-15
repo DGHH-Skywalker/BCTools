@@ -25,7 +25,7 @@
   "use strict";
 
   var STAGE_URL = "/api/decrypt/stage";
-  var IMPORT_URL = "/#/song/import?stage=";
+  var IMPORT_URL = "/#/dorm/manage?stage=";
   var LOGO_URL = "/logo.png";
   var IMPORT_TAB_NAME = "bctools_import";
   var POLL_INTERVAL = 1500; // ms

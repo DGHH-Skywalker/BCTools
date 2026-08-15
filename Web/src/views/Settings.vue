@@ -34,20 +34,6 @@
         </n-card>
       </n-grid-item>
     </n-grid>
-
-    <n-card class="settings-card">
-      <n-space vertical size="large">
-        <n-grid cols="1 s:2 m:3 l:3 xl:3" :x-gap="16" :y-gap="16">
-          <n-grid-item v-if="isLocalhost">
-            <n-space align="center">
-              <n-text>{{ t("settings.autoStart") }}:</n-text>
-              <n-switch v-model:value="settingsStore.autoStartEnabled" @update:value="saveAutoStartSetting" />
-            </n-space>
-          </n-grid-item>
-        </n-grid>
-      </n-space>
-    </n-card>
-
   </PageContainer>
 </template>
 
@@ -56,34 +42,25 @@ import { onMounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
+import { useTheme } from "../composables/useTheme"
 import { Help } from "@icon-park/vue-next"
 import PageContainer from "../components/ui/PageContainer.vue"
 
 const { t } = useI18n()
 const router = useRouter()
 const settingsStore = useSettingsStore()
+const { isDark } = useTheme()
 
 function goToGuide() {
-  router.push("/guide")
+  router.push("/settings/guide")
 }
 
-const isLocalhost = computed(() => {
-  const host = window.location.hostname
-  return host === "localhost" || host === "127.0.0.1" || host === "::1"
-})
-
-const logoSrc = computed(() =>
-  matchMedia("(prefers-color-scheme: dark)").matches ? "/logo-white.png" : "/logo.png"
-)
+const logoSrc = computed(() => (isDark.value ? "/logo-white.png" : "/logo.png"))
 const authorAvatarSrc = "/egansama.jpg"
 
 onMounted(() => {
   settingsStore.fetchSettings()
 })
-
-async function saveAutoStartSetting(val: boolean) {
-  await settingsStore.updateSettings({ autoStartEnabled: val } as any)
-}
 </script>
 
 <style scoped>
@@ -116,9 +93,4 @@ async function saveAutoStartSetting(val: boolean) {
 .settings-author-title {
   margin: 0;
 }
-
-.settings-card {
-  margin-bottom: var(--spacing-md);
-}
-
 </style>

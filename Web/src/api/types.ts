@@ -42,7 +42,6 @@ export interface Settings {
   downloadUrl: string
   adminPasswordHint: string
   locale: string
-  autoStartEnabled: boolean
   broadcastColumnMap: Record<string, string>
   duplicateCheckDays: number
 }
@@ -51,6 +50,9 @@ export interface NetworkInfo {
   ip: string
   port: number
   url: string
+  isWindows: boolean
+  windowsVersion: string
+  isLocalRequest: boolean
 }
 
 export interface ImportResult {

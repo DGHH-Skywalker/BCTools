@@ -2,7 +2,7 @@
   <div class="home-container" @contextmenu.prevent>
     <div v-if="mode === 'home'" class="home-content" @contextmenu.prevent>
       <n-image
-        src="/logo.png"
+        :src="logoSrc"
         alt="logo"
         class="home-logo"
         preview-disabled
@@ -21,12 +21,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, computed } from "vue"
 import { useI18n } from "../i18n"
+import { useTheme } from "../composables/useTheme"
 import FeasibilityCheck from "../components/home/FeasibilityCheck.vue"
 
 const { t } = useI18n()
+const { isDark } = useTheme()
 const mode = ref<"home" | "feasibility">("home")
+const logoSrc = computed(() => (isDark.value ? "/logo-white.png" : "/logo.png"))
 </script>
 
 <style scoped>

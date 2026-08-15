@@ -16,6 +16,9 @@ var (
 	procSHGetPathFromIDListW = modshell32.NewProc("SHGetPathFromIDListW")
 	modole32                 = windows.NewLazySystemDLL("ole32.dll")
 	procCoTaskMemFree        = modole32.NewProc("CoTaskMemFree")
+	moduser32                = windows.NewLazySystemDLL("user32.dll")
+	procGetForegroundWindow  = moduser32.NewProc("GetForegroundWindow")
+	procSetWindowPos         = moduser32.NewProc("SetWindowPos")
 )
 
 const (
@@ -24,6 +27,13 @@ const (
 	BIF_NEWDIALOGSTYLE    = 0x00000040
 	BIF_SHAREABLE         = 0x00008000
 	MAX_PATH              = 260
+
+	HWND_TOPMOST       = -1
+	SWP_NOMOVE         = 0x0002
+	SWP_NOSIZE         = 0x0001
+	SWP_SHOWWINDOW     = 0x0040
+	BFFM_INITIALIZED   = 1
+	BFFM_SETSELECTIONW = 0x0400 + 103
 )
 
 type browseInfoW struct {
@@ -38,7 +48,9 @@ type browseInfoW struct {
 }
 
 // selectDirectory opens a Windows folder browser dialog using SHBrowseForFolderW.
-// Returns an empty string if the user cancels.
+// The dialog is made topmost and owned by the current foreground window so it
+// appears in front of the browser / main application window. Returns an empty
+// string if the user cancels.
 func selectDirectory(title string) (string, error) {
 	if err := windows.CoInitializeEx(0, windows.COINIT_APARTMENTTHREADED); err != nil {
 		// S_FALSE (already initialized) is acceptable
@@ -55,11 +67,15 @@ func selectDirectory(title string) (string, error) {
 
 	displayName := make([]uint16, MAX_PATH)
 
+	owner := getForegroundWindow()
+	callback := windows.NewCallback(browseCallbackProc)
+
 	bi := browseInfoW{
-		HwndOwner:      0,
+		HwndOwner:      owner,
 		pszDisplayName: &displayName[0],
 		lpszTitle:      titlePtr,
 		ulFlags:        BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_DONTGOBELOWDOMAIN | BIF_SHAREABLE,
+		lpfn:           callback,
 	}
 
 	ret, _, _ := procSHBrowseForFolderW.Call(uintptr(unsafe.Pointer(&bi)))
@@ -75,4 +91,24 @@ func selectDirectory(title string) (string, error) {
 	}
 
 	return syscall.UTF16ToString(pathBuf), nil
+}
+
+func getForegroundWindow() windows.HWND {
+	hwnd, _, _ := procGetForegroundWindow.Call()
+	return windows.HWND(hwnd)
+}
+
+func browseCallbackProc(hwnd windows.HWND, msg uint32, lParam, lpData uintptr) uintptr {
+	if msg == BFFM_INITIALIZED {
+		// Ensure the folder dialog stays on top of all other windows.
+		// HWND_TOPMOST is -1 as a signed HWND value.
+		topmost := uintptr(^uint(0))
+		procSetWindowPos.Call(
+			uintptr(hwnd),
+			topmost,
+			0, 0, 0, 0,
+			SWP_NOMOVE|SWP_NOSIZE|SWP_SHOWWINDOW,
+		)
+	}
+	return 0
 }

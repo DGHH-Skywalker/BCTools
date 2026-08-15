@@ -3,27 +3,12 @@
     <n-alert v-if="error" type="error" closable @close="error = ''" style="margin-bottom: 12px;">{{ error }}</n-alert>
     <n-alert v-if="noSlots" type="warning" style="margin-bottom: 12px;">{{ t("songImport.noSlots") }}</n-alert>
 
-    <n-grid cols="1 s:5" :x-gap="16" :y-gap="16" style="margin-bottom: 16px;">
-      <n-grid-item :span="3">
-        <ImportExistingSongs
-          :title="existingTitle"
-          :songs="existingSongs"
-          :slot-name="slotName"
-          :slot-options="slotOptions"
-          @preview="previewSong"
-          @update-slot="onUpdateSlot"
-          @delete-song="onDeleteExistingSong"
-        />
-      </n-grid-item>
-      <n-grid-item :span="2">
-        <ImportUploadZone
-          :title="t('songImport.uploadTitle')"
-          accept=".ncm,.mp3,.mp4,.m4a,.flac,.wav,.aac,.ogg,.wma,.ape"
-          formats="支持 ncm / mp3 / m4a / flac / wav / aac / ogg / wma / ape / mp4"
-          @change="handleFiles"
-        />
-      </n-grid-item>
-    </n-grid>
+    <ImportUploadZone
+      :title="t('songImport.uploadTitle')"
+      accept=".ncm,.mp3,.mp4,.m4a,.flac,.wav,.aac,.ogg,.wma,.ape"
+      formats="支持 ncm / mp3 / m4a / flac / wav / aac / ogg / wma / ape / mp4"
+      @change="handleFiles"
+    />
 
     <ImportProcessingGrid
       :files="processingFiles"
@@ -38,7 +23,7 @@
       @delete="onDeleteFile"
     />
 
-    <n-empty v-if="processingFiles.length === 0" :description="t('songImport.empty')" style="margin-top: 40px;" />
+    <n-empty v-if="processingFiles.length === 0" description="" style="margin-top: 40px;" />
   </div>
 </template>
 
@@ -48,16 +33,16 @@ import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
 import { useSettingsStore } from "../../stores/settings"
 import { useFileProcessor } from "../../composables/useFileProcessor"
+import { fetchStageMeta, fetchStageFile, markStageImported } from "../../api/decrypt"
 import ImportUploadZone from "../song-import/ImportUploadZone.vue"
-import ImportExistingSongs from "../song-import/ImportExistingSongs.vue"
 import ImportProcessingGrid from "../song-import/ImportProcessingGrid.vue"
-import { useAudioPlayer } from "../../composables/useAudioPlayer"
 import dayjs from "dayjs"
 import type { SelectOption } from "naive-ui"
 
 const props = defineProps<{
   date: string
   defaultSlotId?: string
+  stageId?: string
 }>()
 
 const emit = defineEmits<{
@@ -66,7 +51,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const player = useAudioPlayer()
 const songsStore = useSongsStore()
 const settingsStore = useSettingsStore()
 const error = ref("")
@@ -108,32 +92,8 @@ const slotOptions = computed<SelectOption[]>(() => {
   }))
 })
 
-const existingTitle = computed(() => `当日已点歌曲 (${existingSongs.value.length})`)
-const existingSongs = computed(() => {
-  if (!selectedDate.value) return []
-  return songsStore.dormSongs.filter((s) => s.date === selectedDate.value)
-})
-
-function slotName(slotId: string | null) {
-  if (!slotId) return ""
-  const slot = settingsStore.timeSlots.find((s) => s.id === slotId)
-  return slot ? slot.time : "未知时段"
-}
-
 function renderSlotLabel(option: SelectOption) {
   return option.label as string
-}
-
-function previewSong(song: { filePath: string; title: string }) {
-  player.play(song.filePath, song.title)
-}
-
-async function onDeleteExistingSong(songId: number) {
-  try {
-    await songsStore.deleteSong(songId)
-  } catch (err: any) {
-    error.value = err?.message || "删除失败"
-  }
 }
 
 onMounted(async () => {
@@ -143,7 +103,29 @@ onMounted(async () => {
     error.value = "加载数据失败"
   }
   clearFiles()
+  if (props.stageId) {
+    await importFromStage(props.stageId)
+  }
 })
+
+// 从后端暂存区拉取 um-react 解密后的音频并走正常导入流程；
+// 成功后置 imported 标志，um-react 侧轮询到即删除对应卡片
+async function importFromStage(stageId: string) {
+  try {
+    const meta = await fetchStageMeta(stageId)
+    const blob = await fetchStageFile(stageId)
+    const file = new File([blob], meta.filename)
+    const results = await handleFiles({ fileList: [file] })
+    if (results.some((r) => r.status === "done")) {
+      await markStageImported(stageId)
+      emit("song-added")
+    } else {
+      error.value = results[0]?.error || t("songImport.importDecryptedExpired")
+    }
+  } catch {
+    error.value = t("songImport.importDecryptedExpired")
+  }
+}
 
 function dayIndexFromDate(dateStr: string): number {
   const d = dayjs(dateStr)
@@ -161,14 +143,6 @@ async function onDeleteFile(file: any) {
   const err = await deleteFile(file)
   if (err) {
     error.value = err
-  }
-}
-
-async function onUpdateSlot(songId: number, slotId: string) {
-  try {
-    await songsStore.assignSong(songId, slotId)
-  } catch (err: any) {
-    error.value = err?.message || "调整时段失败"
   }
 }
 </script>

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { mount, flushPromises } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
 import { defineComponent, h } from "vue"
+import { createRouter, createMemoryHistory } from "vue-router"
 import dayjs from "dayjs"
 import isoWeek from "dayjs/plugin/isoWeek"
 import naive from "naive-ui"
@@ -42,7 +43,6 @@ vi.mock("@/api/settings", () => ({
   getSettings: vi.fn(async () => ({
     timeSlots: [{ id: "slot-1", dayIndex: 1, time: "12:00", order: 1 }],
     allowTemplateJS: false,
-    autoStartEnabled: true,
     silentPlaceholderDuration: 30,
     version: "5.5.0.0",
     downloadUrl: "",
@@ -135,7 +135,15 @@ describe("DormManage (integrated page)", () => {
     })
 
     const wrapper = mount(Wrapper, {
-      global: { plugins: [naive] },
+      global: {
+        plugins: [
+          naive,
+          createRouter({
+            history: createMemoryHistory(),
+            routes: [{ path: "/dorm/manage", component: DormManage }],
+          }),
+        ],
+      },
     })
 
     await flushPromises()

@@ -89,11 +89,14 @@
   "timeSlots": {
     "title": "时段配置",
     "duplicateCheckSettings": "查重设置",
-    "selectDaysPlaceholder": "请选择要配置的日期",
-    "order": "次序",
+    "back": "返回歌单",
     "time": "时间",
     "addSlot": "添加时段",
     "deleteSlot": "删除",
+    "emptyDay": "该日暂无时段，点击下方按钮添加",
+    "applyToAllDays": "应用到所有天",
+    "applyToAllDaysHint": "拖拽行可调整时段顺序；\"应用到所有天\"会把当前星期配置的时段复制到其他六天（替换其原有时段），保存后生效",
+    "applyToAllDaysDone": "已应用到所有天，保存后生效",
     "deleteConfirm": "将删除 {count} 首已分配到此时段的歌曲，确认删除？",
     "deletedSongs": "已删除 {count} 首歌曲"
   },
@@ -173,6 +176,7 @@
     "title": "在手机上访问本工具",
     "appUrlTitle": "在手机上访问本工具",
     "sameNetworkTip": "手机和电脑应处于同一网络中，否则手机无法连接电脑的后端服务",
+    "openHotspotSettings": "打开移动热点设置",
     "close": "关闭",
     "mobileWarning": "该功能一般在电脑上使用，确定你需要在该设备上使用手机点歌功能？",
     "confirmEnter": "确定进入",
@@ -214,7 +218,6 @@
     "silentDuration": "静音占位时长（秒）",
     "guide": "软件指南",
     "language": "界面语言",
-    "autoStart": "开机自动启动",
     "aboutSoftware": "关于软件",
     "duplicateCheckDays": "查重时间范围",
     "duplicateCheckDaysHint": "默认 30 天，即点歌日期往前推一个月",
@@ -224,7 +227,6 @@
   "dorm": {
     "duplicateWarning": "检测到 {date} 已存在“{title}”，疑似重复，请核实",
     "unassigned": "未分配时段",
-    "editSlotTime": "点击调整时段时间",
     "dragSort": "拖拽排序",
     "assignSlot": "设置时段"
   },
@@ -234,7 +236,7 @@
     "import": "导入歌曲",
     "importDesc1": "在「宿舍点歌」页拖入或点击上传音频文件",
     "importDesc2": "支持格式：ncm / mp3 / flac / wav / mp4",
-    "importDesc3": "ncm 文件会经 um-react 解密并转换为 mp3；也可在「解密歌曲」页单独解密后一键导入",
+    "importDesc3": "ncm 文件会经 um-react 解密并转换为 mp3；也可通过侧边栏「解密歌曲」打开 um-react 单独解密后一键导入",
     "importDesc4": "ncm 解密仅供学习交流，请支持正版音乐",
     "dorm": "宿舍歌单",
     "dormDesc1": "按周以卡片展示，每个时段为时间轴上的一个节点",
@@ -269,10 +271,9 @@
     "ffprobe": "ffprobe 可用",
     "localStorage": "本地存储可写",
     "audio": "音频播放能力",
-    "fileSelect": "文件选择能力",
-    "localhost": "本机访问",
     "pass": "正常",
     "fail": "异常",
+    "recheck": "重新检测",
     "start": "开始点歌",
     "back": "返回首页",
     "confirmTitle": "可行性检测未通过",
@@ -300,12 +301,6 @@
     "reload": "重新加载",
     "networkUnavailable": "无法连接到服务端，请确认工具已启动",
     "notFound": "请求的资源不存在"
-  },
-  "decrypt": {
-    "title": "解密歌曲",
-    "description": "Unlock-music-React 是一个独立的外部小工具，本软件将其整体引入并未做任何修改。",
-    "note": "点击下方按钮将在新标签页中打开该工具，所有解密操作均在浏览器本地完成。",
-    "openTool": "打开解密工具"
   },
   "common": {
     "confirm": "确认",

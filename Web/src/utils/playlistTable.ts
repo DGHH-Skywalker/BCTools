@@ -82,9 +82,12 @@ function dateCellHtml(date: string, weekdayShortName: (dayIndex: number) => stri
 
 export function buildDormTableHTML(dates: string[], options: BuildDormTableOptions): string {
   const { title = null, songs, timeSlots, weekdayShortName } = options
+  const safeTimeSlots = timeSlots || []
+  const safeSongs = songs || []
+  const safeDates = dates || []
   const timeSet = new Set<string>()
-  for (const date of dates) {
-    for (const slot of slotsForDate(date, timeSlots)) {
+  for (const date of safeDates) {
+    for (const slot of slotsForDate(date, safeTimeSlots)) {
       timeSet.add(slot.time)
     }
   }
@@ -94,11 +97,11 @@ export function buildDormTableHTML(dates: string[], options: BuildDormTableOptio
   const firstColWidth = 15
   const otherWidth = Math.floor((100 - firstColWidth) / times.length * 100) / 100
 
-  const rows = dates.map(date => {
-    const daySlots = slotsForDate(date, timeSlots)
+  const rows = safeDates.map(date => {
+    const daySlots = slotsForDate(date, safeTimeSlots)
     const slotMap: Record<string, Song[]> = {}
     for (const slot of daySlots) {
-      slotMap[slot.time] = songs.filter(s => s.date === date && s.timeSlotId === slot.id)
+      slotMap[slot.time] = safeSongs.filter(s => s.date === date && s.timeSlotId === slot.id)
     }
     const cells = times.map(time => {
       const slotSongs = (slotMap[time] || [])

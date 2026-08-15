@@ -41,7 +41,6 @@ func DefaultSettings() models.Settings {
 		Locale:                    "zh-CN",
 		Version:                   version.Version,
 		DownloadURL:               "",
-		AutoStartEnabled:          true,
 		BroadcastColumnMap:        defaultBroadcastColumnMap(),
 		DuplicateCheckDays:        30,
 	}

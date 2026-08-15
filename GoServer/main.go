@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"broadcast-tool/autostart"
 	"broadcast-tool/browser"
 	"broadcast-tool/converter"
 	"broadcast-tool/handlers"
@@ -60,8 +59,7 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	var (
-		devMode    = flag.Bool("dev", false, "开发模式：替换已有后端")
-		background = flag.Bool("background", false, "仅启动后端，不打开浏览器（用于开机自启）")
+		devMode = flag.Bool("dev", false, "开发模式：替换已有后端")
 	)
 	flag.Parse()
 
@@ -96,15 +94,6 @@ func main() {
 			log.Fatalf("Port %d is still in use after cleanup", port)
 		}
 		running = false
-	}
-
-	// 后台模式：已被占用则直接退出，否则成为后端且不打开浏览器
-	if *background {
-		if running {
-			return
-		}
-		runBackend(appDataDir, port, false)
-		return
 	}
 
 	// 普通模式：后端已存在则只打开浏览器并退出
@@ -176,14 +165,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) {
 	snapshotStore := snapshotstore.New(repo, logger)
 	deletedLogStore := deletedlogstore.New(appDataDir)
 
-	// 5. Apply auto-start setting（一次性测试版跳过，不写开机自启注册表）
-	if !ephemeralMode {
-		if err := autostart.Apply(settingsStore.GetSettingsRaw().AutoStartEnabled); err != nil {
-			log.Printf("WARNING: failed to apply auto-start setting: %v", err)
-		}
-	}
-
-	// 6. Init converter (ffmpeg/ffprobe)
+	// 5. Init converter (ffmpeg/ffprobe)
 	binDir := paths.GetBinDir(appDataDir)
 	if err := binembed.Extract(binDir); err != nil {
 		log.Printf("WARNING: failed to extract embedded ffmpeg/ffprobe: %v", err)

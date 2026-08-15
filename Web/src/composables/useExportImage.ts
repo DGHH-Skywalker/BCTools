@@ -417,8 +417,8 @@ export function useExportImage() {
         type === "dorm"
           ? buildDormTableHTML(dates, {
               title: t("export.dorm"),
-              songs: songsStore.dormSongs,
-              timeSlots: settingsStore.timeSlots,
+              songs: songsStore.dormSongs || [],
+              timeSlots: settingsStore.timeSlots || [],
               weekdayShortName,
               emptyTitleText: "",
             })

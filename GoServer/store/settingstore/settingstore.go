@@ -41,7 +41,6 @@ func (s *SettingsStore) GetSettings() models.PublicSettings {
 			Locale:                    data.Settings.Locale,
 			Version:                   data.Settings.Version,
 			DownloadURL:               data.Settings.DownloadURL,
-			AutoStartEnabled:          data.Settings.AutoStartEnabled,
 			BroadcastColumnMap:        ensureBroadcastColumnMap(data.Settings.BroadcastColumnMap),
 			DuplicateCheckDays:        data.Settings.DuplicateCheckDays,
 		}
@@ -124,9 +123,6 @@ func (s *SettingsStore) UpdateSettings(req models.UpdateSettingsRequest) error {
 		}
 		if req.TimeSlots != nil {
 			data.Settings.TimeSlots = *req.TimeSlots
-		}
-		if req.AutoStartEnabled != nil {
-			data.Settings.AutoStartEnabled = *req.AutoStartEnabled
 		}
 		if req.BroadcastColumnMap != nil {
 			data.Settings.BroadcastColumnMap = ensureBroadcastColumnMap(*req.BroadcastColumnMap)

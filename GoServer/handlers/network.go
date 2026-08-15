@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 
 	"broadcast-tool/network"
@@ -20,14 +21,25 @@ func NewNetworkHandler(port int) *NetworkHandler {
 	return &NetworkHandler{Port: port}
 }
 
-// HandleGetInfo returns the local IP and port for mobile access.
+// HandleGetInfo returns the local IP, port, mobile URL, and server/client OS info.
 func (h *NetworkHandler) HandleGetInfo(w http.ResponseWriter, r *http.Request) {
 	ip := network.GetLocalIP()
 	url := fmt.Sprintf("http://%s:%d/", ip, h.Port)
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	isLocalRequest := network.IsLocalhost(host)
+	isWindows, windowsVersion := network.GetWindowsInfo()
+
 	response.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"ip":   ip,
-		"port": h.Port,
-		"url":  url,
+		"ip":             ip,
+		"port":           h.Port,
+		"url":            url,
+		"isLocalRequest": isLocalRequest,
+		"isWindows":      isWindows,
+		"windowsVersion": windowsVersion,
 	})
 }
 

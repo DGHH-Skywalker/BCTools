@@ -222,7 +222,7 @@ func validateTargetName(name string) (string, error) {
 	if base == "" || base == "." || strings.Contains(base, "..") {
 		return "", fmt.Errorf("invalid target name")
 	}
-	if strings.ContainsAny(base, `\/:*?"\u003c\u003e|`) {
+	if strings.ContainsAny(base, `\/:*?"<>|`) {
 		return "", fmt.Errorf("invalid characters in target name")
 	}
 	return base, nil

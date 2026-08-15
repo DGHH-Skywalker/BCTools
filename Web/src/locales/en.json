@@ -86,11 +86,14 @@
   "timeSlots": {
     "title": "Time Slot Configuration",
     "duplicateCheckSettings": "Duplicate Check Settings",
-    "selectDaysPlaceholder": "Select days to configure",
-    "order": "Order",
+    "back": "Back to Songs",
     "time": "Time",
     "addSlot": "Add Slot",
     "deleteSlot": "Delete",
+    "emptyDay": "No slots on this day yet. Use the button below to add one.",
+    "applyToAllDays": "Apply to All Days",
+    "applyToAllDaysHint": "Drag rows to reorder slots. \"Apply to All Days\" copies the current weekday's slots to the other six days (replacing theirs), effective after saving.",
+    "applyToAllDaysDone": "Applied to all days. Effective after saving.",
     "deleteConfirm": "This will delete {count} songs assigned to this slot. Confirm?",
     "deletedSongs": "Deleted {count} songs"
   },
@@ -170,6 +173,7 @@
     "title": "Open this tool on your phone",
     "appUrlTitle": "Open this tool on your phone",
     "sameNetworkTip": "Your phone and computer should be on the same network, otherwise the phone cannot connect to the backend service",
+    "openHotspotSettings": "Open mobile hotspot settings",
     "close": "Close",
     "mobileWarning": "This feature is usually used on a computer. Are you sure?",
     "confirmEnter": "Enter",
@@ -211,7 +215,6 @@
     "silentDuration": "Silent placeholder duration (seconds)",
     "guide": "User Guide",
     "language": "Language",
-    "autoStart": "Auto-start on boot",
     "aboutSoftware": "About Software",
     "duplicateCheckDays": "Duplicate Check Range (days)",
     "duplicateCheckDaysHint": "Default 30 days before the selected date",
@@ -221,7 +224,6 @@
   "dorm": {
     "duplicateWarning": "Possible duplicate — “{title}” already exists on {date}. Please verify.",
     "unassigned": "Unassigned",
-    "editSlotTime": "Click to edit time",
     "dragSort": "Drag to reorder",
     "assignSlot": "Set slot"
   },
@@ -231,7 +233,7 @@
     "import": "Import Songs",
     "importDesc1": "Drag and drop or click to upload audio files on the Song Import page",
     "importDesc2": "Supported formats: ncm / mp3 / flac / wav / mp4",
-    "importDesc3": "NCM files are decrypted via um-react and converted to MP3; you can also decrypt separately on the Decrypt page and import in one click",
+    "importDesc3": "NCM files are decrypted via um-react and converted to MP3; you can also open um-react from the sidebar \"Decrypt Songs\" button to decrypt separately and import in one click",
     "importDesc4": "NCM decryption is for learning purposes only. Please support legal music",
     "dorm": "Dorm Playlist",
     "dormDesc1": "Shown as weekly cards; each time slot is a node on the timeline",
@@ -266,10 +268,9 @@
     "ffprobe": "ffprobe Available",
     "localStorage": "Local Storage Writable",
     "audio": "Audio Playback",
-    "fileSelect": "File Selection",
-    "localhost": "Localhost Access",
     "pass": "OK",
     "fail": "Issue",
+    "recheck": "Re-check",
     "start": "Start Song Selection",
     "back": "Back to Home",
     "confirmTitle": "Feasibility Check Failed",
@@ -296,12 +297,6 @@
     "reload": "Reload",
     "networkUnavailable": "Cannot connect to server",
     "notFound": "Resource not found"
-  },
-  "decrypt": {
-    "title": "Decrypt Songs",
-    "description": "Unlock-music-React is an independent external tool. This software integrates it as-is without any modifications.",
-    "note": "Click the button below to open the tool in a new tab. All decryption is performed locally in the browser.",
-    "openTool": "Open Decrypt Tool"
   },
   "common": {
     "confirm": "Confirm",
