@@ -135,9 +135,23 @@ function computeOriginTransform(origin: DOMRect) {
   }
 }
 
+function resetTransform() {
+  transitionEnabled.value = false
+  transformStyle.value = {
+    transform: "translate(0,0) scale(1)",
+    opacity: 1,
+    transformOrigin: "top left",
+  }
+}
+
 function animateOpen() {
   const origin = player.originRect.value
-  if (!origin) return
+  if (!origin) {
+    // 没有起点矩形就没有展开动画，但必须显式复位——否则会残留上一次
+    // 收起动画留下的 scale(0.2)/opacity:0。
+    resetTransform()
+    return
+  }
   transitionEnabled.value = false
   transformStyle.value = computeOriginTransform(origin)
   requestAnimationFrame(() => {
@@ -222,10 +236,26 @@ onMounted(() => {
     },
     { immediate: true },
   )
-  // 若从按钮位置展开，播放进入动画
-  if (player.originRect.value) {
-    animateOpen()
-  }
+  // 每次变为可见都要重跑展开动画，而不是只在挂载时跑一次。
+  //
+  // 该组件在 App.vue 里是常挂载的（外层 v-show），内部 wrapper 用 v-if 控制。
+  // 关闭动画结束时 transform 停在 scale(0.2)/opacity:0；如果只在 onMounted
+  // 里 animateOpen，第二次打开就会带着这份透明状态渲染出来——DOM 里有元素，
+  // 但用户什么也看不见，表现为「按钮点了就消失，播放器再也打不开」。
+  watch(
+    () => player.isVisible.value,
+    (visible) => {
+      if (!visible) return
+      // 收起动画可能还没跑完就又被打开，取消它以免 260ms 后把刚开的窗口关掉。
+      if (closeTimeout.value !== null) {
+        window.clearTimeout(closeTimeout.value)
+        closeTimeout.value = null
+      }
+      isClosing.value = false
+      animateOpen()
+    },
+    { immediate: true },
+  )
 })
 
 onUnmounted(() => {

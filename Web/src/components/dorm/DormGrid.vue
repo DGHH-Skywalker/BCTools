@@ -83,14 +83,6 @@
             @toggle-popover="(id) => (openSlotSongId = id)"
           />
         </template>
-        <template #footer>
-          <n-empty
-            v-if="(slotLists[PENDING_KEY] || []).length === 0"
-            size="small"
-            :description="t('dorm.pendingCardEmpty')"
-            style="padding:12px 0;"
-          />
-        </template>
       </draggable>
     </n-card>
   </div>

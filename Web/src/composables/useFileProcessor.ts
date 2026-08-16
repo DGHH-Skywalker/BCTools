@@ -99,7 +99,7 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
       processingFiles.push(item)
       added.push(item)
     }
-    runQueue()
+    pumpQueue()
     // Resolve once every file just added reaches a terminal status, so callers
     // (e.g. the um-react staged-import flow) can react to success/failure.
     return waitForSettled(added)
@@ -116,6 +116,18 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
       }
       tick()
     })
+  }
+
+  // 启动工作链直到占满并发额度。
+  //
+  // 此前只调用一次 runQueue()，而 runQueue 内部是 `await processItem` 后再递归，
+  // 等于始终只有一条链在跑——concurrency=3 从未真正生效，多文件导入完全串行。
+  // 改为按空闲额度拉起多条链。
+  function pumpQueue() {
+    const idle = concurrency - running
+    for (let i = 0; i < idle; i++) {
+      runQueue()
+    }
   }
 
   async function runQueue() {
@@ -210,7 +222,7 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
   function retryFile(item: ProcessingFile) {
     item.status = "pending"
     item.error = ""
-    runQueue()
+    pumpQueue()
   }
 
   async function deleteFile(item: ProcessingFile): Promise<string | undefined> {

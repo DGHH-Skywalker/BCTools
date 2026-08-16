@@ -45,6 +45,7 @@ main.go
 - **复杂业务**：优先抽到 `GoServer/services/`，保持 handler 简短。
 - **数据访问**：通过 `store/*` 包操作；`internal/repo` 负责底层 JSON 持久化。
 - **系统交互**：执行外部命令（隐藏控制台窗口）、打开浏览器、查询 Windows 版本，统一用 `GoServer/platform/`。
+- **音频转码**：`converter/process.go` 的 `toMP3()` 会先嗅探格式（`converter/sniff.go`），解密结果已是 MP3 时直接搬运，不调 ffmpeg。重编码一首 4 分钟的歌约 4.8s，搬运 ~1ms，且能避免二次有损转码。不要改回无条件 `ConvertToMP3`。
 - **进程退出**：托盘、Ctrl-C、前端 `POST /api/shutdown` 三条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），不要把它挪到子 goroutine。
 
 ### 前端分层

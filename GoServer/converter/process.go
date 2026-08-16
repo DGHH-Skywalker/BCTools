@@ -112,16 +112,56 @@ func (c *FFMpegConverter) processEncrypted(inputPath, outputPath string) (ProbeR
 	// because the decrypted raw audio may not be MP3.
 	if outputPath == inputPath {
 		mp3Path := inputPath + ".mp3"
-		if err := c.ConvertToMP3(tmpPath, mp3Path); err != nil {
+		if err := c.toMP3(tmpPath, mp3Path); err != nil {
 			return ProbeResult{}, fmt.Errorf("convert: %w", err)
 		}
 		return result, nil
 	}
 
-	if err := c.ConvertToMP3(tmpPath, outputPath); err != nil {
+	if err := c.toMP3(tmpPath, outputPath); err != nil {
 		return ProbeResult{}, fmt.Errorf("convert: %w", err)
 	}
 	return result, nil
+}
+
+// toMP3 把解密后的音频落到 outputPath。
+//
+// 关键优化：网易云 .ncm 等格式解出来的绝大多数本身就是 MP3，此前无条件走
+// ffmpeg libmp3lame 重编码，一首 4 分钟的歌要 ~4.7s；直接搬运只需 ~0.13s。
+// 重编码不仅慢，还会因有损转码再损失一次音质。
+// 只有解出来确实不是 MP3（flac/m4a/ogg 等）时才真正调用 ffmpeg 转码。
+func (c *FFMpegConverter) toMP3(srcPath, outputPath string) error {
+	format, err := sniffFile(srcPath)
+	if err != nil {
+		// 读不出文件头就保守走转码，让 ffmpeg 去报真正的错。
+		return c.ConvertToMP3(srcPath, outputPath)
+	}
+	if format != formatMP3 {
+		return c.ConvertToMP3(srcPath, outputPath)
+	}
+	// 已经是 MP3：直接移动，跨盘失败再退化为复制。
+	if err := os.Rename(srcPath, outputPath); err == nil {
+		return nil
+	}
+	if err := CopyFile(srcPath, outputPath); err != nil {
+		return fmt.Errorf("copy decrypted mp3: %w", err)
+	}
+	return nil
+}
+
+// sniffFile 读取文件头判断音频格式。
+func sniffFile(path string) (audioFormat, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return formatUnknown, err
+	}
+	defer f.Close()
+	header := make([]byte, 16)
+	n, err := io.ReadFull(f, header)
+	if err != nil && n == 0 {
+		return formatUnknown, err
+	}
+	return sniffAudioFormat(header[:n]), nil
 }
 
 // CopyFile copies src to dst, creating directories as needed.
