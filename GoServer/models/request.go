@@ -1,9 +1,26 @@
 package models
 
-// OrganizeEntry represents one file to organize
+// OrganizeEntry represents one target file to produce on the SD card.
+//
+// Source 与 Sources 的关系：
+//   - Sources 非空：该时段有多首歌，按顺序合并成一个 MP3（Source 被忽略）
+//   - Source 非空：单首歌，直接复制/移动
+//   - 两者都为空：该时段没歌，生成静音占位
 type OrganizeEntry struct {
-	Source     string `json:"source"`
-	TargetName string `json:"targetName"`
+	Source     string   `json:"source"`
+	Sources    []string `json:"sources,omitempty"`
+	TargetName string   `json:"targetName"`
+}
+
+// EffectiveSources 返回该条目实际要用到的源文件列表。
+func (e OrganizeEntry) EffectiveSources() []string {
+	if len(e.Sources) > 0 {
+		return e.Sources
+	}
+	if e.Source != "" {
+		return []string{e.Source}
+	}
+	return nil
 }
 
 // OrganizeRequest is the request body for POST /api/files/organize

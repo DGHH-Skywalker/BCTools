@@ -215,7 +215,6 @@
     "updateFailed": "检查更新失败，请检查网络",
     "templateJS": "允许模板执行 JavaScript",
     "jsWarning": "启用后模板可执行 JavaScript，可能带来安全风险。确定开启？",
-    "silentDuration": "静音占位时长（秒）",
     "guide": "软件指南",
     "language": "界面语言",
     "aboutSoftware": "关于软件",

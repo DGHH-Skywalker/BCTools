@@ -43,7 +43,6 @@ vi.mock("@/api/misc", () => ({
   getSettings: vi.fn(async () => ({
     timeSlots: [{ id: "slot-1", dayIndex: 1, time: "12:00", order: 1 }],
     allowTemplateJS: false,
-    silentPlaceholderDuration: 30,
     version: "5.5.0.0",
     downloadUrl: "",
     adminPasswordHint: "",

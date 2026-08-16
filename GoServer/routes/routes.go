@@ -46,6 +46,7 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 			r.Get("/browse", hs.Files.HandleBrowse)
 			r.Get("/stream", hs.Files.HandleStream)
 			r.Get("/silent", hs.Files.HandleSilent)
+			r.Post("/merge", hs.Files.HandleMerge)
 			r.Delete("/source", hs.Files.HandleDeleteSource)
 		})
 		r.Route("/auth", func(r chi.Router) {

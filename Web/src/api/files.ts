@@ -21,7 +21,7 @@ export async function stashFile(file: File): Promise<FileProcessResult> {
 }
 
 export async function organizeFiles(data: {
-  entries: { source: string; targetName: string }[]
+  entries: { source: string; sources?: string[]; targetName: string }[]
   targetDir: string
   mode: "copy" | "move"
   confirm?: boolean
@@ -35,9 +35,29 @@ export async function selectDir(): Promise<string> {
   return res.data.path
 }
 
-export async function fetchSilentMP3(duration: number): Promise<Blob> {
-  const res = await fetch(`/api/files/silent?duration=${duration}`)
+// fetchSilentMP3 让后端返回固定 17.43s 的静音 MP3。
+//
+// 重要：时长由后端 converter.DefaultSilentPlaceholder 写死——前端的
+// File System Access API 那条导出路径在这里和后端内部 organizeService 走的是
+// 同一个常量，SD 卡上同一序号文件的时长才会一致。**绝不要让前端传时长**，
+// 否则会出现「整天空着时后端 internal 路径 17.43s、浏览器路径 30s」这种对不上
+// 的诡异 bug。
+export async function fetchSilentMP3(): Promise<Blob> {
+  const res = await fetch("/api/files/silent")
   if (!res.ok) throw new Error("生成静音文件失败")
+  return res.blob()
+}
+
+// fetchMergedMP3 让后端把同一时段的多首歌按顺序合并成一个 MP3 并回传。
+// 用于「文件系统访问 API」那条导出路径——那条路径由浏览器自己写 SD 卡，
+// 拿不到服务端内部的合并结果。
+export async function fetchMergedMP3(sources: string[]): Promise<Blob> {
+  const res = await fetch("/api/files/merge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources }),
+  })
+  if (!res.ok) throw new Error("合并音频失败")
   return res.blob()
 }
 

@@ -212,7 +212,6 @@
     "updateFailed": "Update check failed",
     "templateJS": "Allow JavaScript in templates",
     "jsWarning": "Enabling JavaScript in templates may pose security risks. Are you sure?",
-    "silentDuration": "Silent placeholder duration (seconds)",
     "guide": "User Guide",
     "language": "Language",
     "aboutSoftware": "About Software",

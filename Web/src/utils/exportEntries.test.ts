@@ -80,27 +80,36 @@ describe("buildExportEntries slot-aligned numbering", () => {
     expect(entries[2].source).not.toBe("")
   })
 
-  it("gives consecutive numbers to multiple songs in one slot", () => {
+  it("merges multiple songs in one slot into a single numbered file", () => {
     const songs = [
       song(1, WEEK[0], "d1-s1", 0),
       song(2, WEEK[0], "d1-s1", 1),
     ]
     const entries = buildExportEntries(WEEK, songs, slots())
-    // 同一时段两首歌 -> 占 01、02；其余 26 个时段各占一个 -> 共 29
-    expect(entries).toHaveLength(29)
-    expect(entries[0].source).toBe("/songs/1.mp3")
-    expect(entries[1].source).toBe("/songs/2.mp3")
-    expect(entries[2].source).toBe("")
+    // 同一时段的两首歌合并成一个文件，仍只占 01 这一个序号；
+    // 一周 28 个时段 -> 恒定 28 个文件。
+    expect(entries).toHaveLength(28)
+    expect(entries[0].targetName).toBe("01.mp3")
+    expect(entries[0].sources).toEqual(["/songs/1.mp3", "/songs/2.mp3"])
+    // 下一个时段仍是 02，没有被挤走
+    expect(entries[1].targetName).toBe("02.mp3")
+    expect(entries[1].sources).toBeUndefined()
   })
 
-  it("orders songs within a slot by drag order, not by id", () => {
+  it("orders merged songs within a slot by drag order, not by id", () => {
     const songs = [
-      song(9, WEEK[0], "d1-s1", 1), // 后拖到第二位
-      song(3, WEEK[0], "d1-s1", 0), // 排第一
+      song(9, WEEK[0], "d1-s1", 1), // 拖到第二位
+      song(3, WEEK[0], "d1-s1", 0), // 第一位
     ]
     const entries = buildExportEntries(WEEK, songs, slots())
-    expect(entries[0].source).toBe("/songs/3.mp3")
-    expect(entries[1].source).toBe("/songs/9.mp3")
+    // 合并顺序必须跟拖拽顺序，否则 SD 卡上播放次序是错的
+    expect(entries[0].sources).toEqual(["/songs/3.mp3", "/songs/9.mp3"])
+  })
+
+  it("does not set sources for a single-song slot", () => {
+    const entries = buildExportEntries(WEEK, [song(1, WEEK[0], "d1-s1")], slots())
+    expect(entries[0].source).toBe("/songs/1.mp3")
+    expect(entries[0].sources).toBeUndefined()
   })
 
   it("ignores songs assigned to a deleted slot rather than misnumbering", () => {

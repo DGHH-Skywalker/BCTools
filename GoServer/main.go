@@ -231,7 +231,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown f
 
 	routes.RegisterRoutes(r, routes.HandlerSet{
 		Songs:     handlers.NewSongHandler(songStore, snapshotStore),
-		Files:     handlers.NewFileHandler(appDataDir, settingsStore, conv),
+		Files:     handlers.NewFileHandler(appDataDir, conv),
 		Auth:      handlers.NewAuthHandler(settingsStore),
 		Settings:  handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
 		Snapshot:  handlers.NewSnapshotHandler(snapshotStore),

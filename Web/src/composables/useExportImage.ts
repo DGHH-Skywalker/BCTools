@@ -371,7 +371,9 @@ export function useExportImage() {
     type: SongType = "dorm"
   ): string {
     const cols = hasDateCol ? `140px repeat(${colCount - 1}, 1fr)` : `repeat(${colCount}, 1fr)`
-    const borderColor = type === "broadcast" ? "var(--color-poster-table-border-broadcast)" : "var(--color-poster-table-border)"
+    // 导出图片的分割线统一固定白色，**不允许**跟随主题色：
+    // 海报底色是 #1a1a1a，跟随主题色在用户改主题后会出现对比度不足。
+    const borderColor = "#ffffff"
     return `<div class="ex-poster-grid ${type}" style="grid-template-columns:${cols};grid-template-rows:auto repeat(${rowCount},minmax(100px,auto));border-color:${borderColor};">
       ${rowsHtml}
     </div>`
@@ -396,7 +398,8 @@ export function useExportImage() {
     if (narrow) classes.push("narrow")
     if (fontRole) classes.push(fontRole)
 
-    const borderColor = type === "broadcast" ? "var(--color-poster-table-border-broadcast)" : "var(--color-poster-table-border)"
+    // 单元格分割线也是固定白色，理由同 gridWrapperHtml。
+    const borderColor = "#ffffff"
     const borderBottom = type === "broadcast" ? "" : `border-bottom:1px solid ${borderColor};`
     const borderRight = type === "dorm" || colIndex === totalCols - 1 ? "" : `border-right:1px solid ${borderColor};`
 

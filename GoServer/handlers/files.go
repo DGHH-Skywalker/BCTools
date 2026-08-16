@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"broadcast-tool/converter"
@@ -15,7 +14,6 @@ import (
 	"broadcast-tool/paths"
 	"broadcast-tool/response"
 	"broadcast-tool/services"
-	"broadcast-tool/store/settingstore"
 	"broadcast-tool/validation"
 
 	"github.com/google/uuid"
@@ -23,16 +21,14 @@ import (
 
 type FileHandler struct {
 	AppDataDir      string
-	Settings        *settingstore.SettingsStore
 	Converter       *converter.FFMpegConverter
 	organizeService *services.OrganizeService
 }
 
-func NewFileHandler(appDataDir string, settings *settingstore.SettingsStore, c *converter.FFMpegConverter) *FileHandler {
-	h := &FileHandler{AppDataDir: appDataDir, Settings: settings, Converter: c}
+func NewFileHandler(appDataDir string, c *converter.FFMpegConverter) *FileHandler {
+	h := &FileHandler{AppDataDir: appDataDir, Converter: c}
 	h.organizeService = services.NewOrganizeService(
 		appDataDir,
-		settings,
 		c,
 		h.validateSourcePath,
 		validateTargetName,
@@ -136,6 +132,61 @@ func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 		Title:        result.Title,
 		Artist:       result.Artist,
 	})
+}
+
+// HandleMerge 把多个歌库文件按顺序合并成一个 MP3 并直接回传。
+//
+// 供前端「文件系统访问 API」那条导出路径使用：那条路径由浏览器自己写 SD 卡，
+// 拿不到后端的合并结果，所以需要一个能直接取到合并后字节流的端点。
+// 后端直连目录的那条路径不走这里（它在服务端内部合并，见 organize_service）。
+func (h *FileHandler) HandleMerge(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Sources []string `json:"sources"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteValidationError(w, "请求体格式错误")
+		return
+	}
+	if len(req.Sources) == 0 {
+		response.WriteValidationError(w, "sources 不能为空")
+		return
+	}
+
+	absSources := make([]string, 0, len(req.Sources))
+	for _, src := range req.Sources {
+		abs, err := h.validateSourcePath(src)
+		if err != nil {
+			response.WriteValidationError(w, "非法文件路径")
+			return
+		}
+		if _, err := os.Stat(abs); err != nil {
+			response.WriteNotFoundError(w, "源文件不存在")
+			return
+		}
+		absSources = append(absSources, abs)
+	}
+
+	tempDir := paths.GetTempDir(h.AppDataDir)
+	if err := paths.EnsureDir(tempDir); err != nil {
+		response.WriteInternalError(w, "创建临时目录失败")
+		return
+	}
+	outPath := filepath.Join(tempDir, "merged-"+uuid.New().String()+".mp3")
+	defer os.Remove(outPath)
+
+	if err := converter.MergeMP3s(absSources, outPath); err != nil {
+		response.WriteInternalError(w, "合并音频失败")
+		return
+	}
+
+	info, err := os.Stat(outPath)
+	if err != nil {
+		response.WriteInternalError(w, "合并音频失败")
+		return
+	}
+	w.Header().Set("Content-Type", "audio/mpeg")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
+	http.ServeFile(w, r, outPath)
 }
 
 func classifyConversionError(err error) string {
@@ -342,25 +393,22 @@ func validateBrowsePath(dir string) (string, error) {
 	return clean, nil
 }
 
+// HandleSilent 生成一个固定时长的静音 MP3 并回传，供前端 File System Access API
+// 那条导出路径在浏览器里直接写 SD 卡。
+//
+// 时长是硬编码的 17.43s（converter.DefaultSilentPlaceholder），与后端内部
+// organizeService 走的是同一个常量——绝不能按 query 参数让前端随便传，否则
+// 整天空着时生成的占位时长会跟内部路径不一致，SD 卡上同一序号文件的时长
+// 就会对不上。
 func (h *FileHandler) HandleSilent(w http.ResponseWriter, r *http.Request) {
-	durStr := r.URL.Query().Get("duration")
-	if durStr == "" {
-		durStr = "30"
-	}
-	dur, err := strconv.Atoi(durStr)
-	if err != nil || dur <= 0 {
-		response.WriteValidationError(w, "静音时长无效")
-		return
-	}
-
 	tempDir := paths.GetTempDir(h.AppDataDir)
 	if err := paths.EnsureDir(tempDir); err != nil {
 		response.WriteInternalError(w, "创建临时目录失败")
 		return
 	}
 
-	tempPath := filepath.Join(tempDir, fmt.Sprintf("silent-%d.mp3", dur))
-	if err := h.Converter.GenerateSilentMP3(tempPath, dur); err != nil {
+	tempPath := filepath.Join(tempDir, "silent.mp3")
+	if err := h.Converter.GenerateSilentMP3(tempPath, converter.DefaultSilentPlaceholder); err != nil {
 		response.WriteInternalError(w, "生成静音文件失败")
 		return
 	}

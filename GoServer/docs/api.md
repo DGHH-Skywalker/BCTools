@@ -195,7 +195,9 @@ interface Song {
 ```json
 {
   "entries": [
-    { "source": "temp/xxx.mp3", "targetName": "01.mp3" }
+    { "source": "temp/xxx.mp3", "targetName": "01.mp3" },
+    { "sources": ["a.mp3", "b.mp3"], "targetName": "02.mp3" },
+    { "source": "", "targetName": "03.mp3" }
   ],
   "targetDir": "D:/target",
   "mode": "copy",
@@ -203,7 +205,17 @@ interface Song {
 }
 ```
 
-`source` 为空时生成静音占位文件。
+条目的三种形态（一个时段 = 一个序号 = SD 卡上一个文件）：
+
+| 形态 | 行为 |
+|------|------|
+| `source` 非空 | 单首歌，直接复制/移动 |
+| `sources` 长度 > 1 | 同一时段多首歌，**按顺序合并成一个 MP3** |
+| 两者都为空 | 该时段没歌，生成静音占位 |
+
+合并只发生在导出时，歌库里仍然分开存放；合并模式下**绝不删除源文件**
+（即使 `mode` 是 `move`）。任一源文件校验失败或缺失时整条跳过，
+不会在 SD 卡上留下残缺文件。
 
 响应：
 ```json
@@ -214,6 +226,29 @@ interface Song {
   "existingFiles": ["01.mp3"]
 }
 ```
+
+多文件合并的条目，响应里的 `source` 为各源以 `" + "` 连接的字符串。
+
+### 合并音频
+
+`POST /api/files/merge`
+
+请求体：
+```json
+{ "sources": ["a.mp3", "b.mp3"] }
+```
+
+按顺序合并并直接返回 `audio/mpeg` 字节流。供前端「文件系统访问 API」
+那条导出路径使用——那条路径由浏览器自行写入 SD 卡，拿不到服务端内部的合并结果。
+
+**实现说明**：项目内置的精简版 ffmpeg 为压到 3.7 MB，只保留了 mp3 muxer 与 file
+协议，**没有** concat demuxer / concat 滤镜 / PCM muxer，标准的 ffmpeg 合并方案
+在这里全部不可用（实测三种均失败）。MPEG-1 Audio 是帧序列格式，天然支持首尾
+相接，因此采用字节拼接——无损、不重编码、速度快。唯一要处理的是标签：只保留
+第一个文件的 ID3v2，后续文件的 ID3v2 与所有 ID3v1 一律剥除，否则会成为流中间的
+非音频数据，导致播放器报 `Header missing` 并丢帧。
+
+实测：209.79 s + 228.15 s 合并后重新解码得 437.995 s，音频完整无损。
 
 ### 选择文件夹
 
@@ -252,13 +287,16 @@ interface Song {
   "allowTemplateJS": false,
   "autoBackupPath": "",
   "autoBackupEnabled": false,
-  "silentPlaceholderDuration": 30,
   "adminPasswordHint": "",
   "locale": "zh-CN",
   "version": "5.5.0.0",
   "downloadUrl": ""
 }
 ```
+
+> 注：静音占位时长固定为 17.43s（后端 `converter.DefaultSilentPlaceholder`），
+> 不再作为可配设置项。整天空着时该天所有时段都生成 17.43s 的静音占位，SD 卡
+> 上的曲序与歌单一一对应。
 
 ### 更新
 

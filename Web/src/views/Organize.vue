@@ -61,13 +61,14 @@ import { useI18n } from "../i18n"
 import { useTheme } from "../composables/useTheme"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
-import { organizeFiles, fetchSilentMP3, selectDir } from "../api/files"
+import { organizeFiles, fetchSilentMP3, fetchMergedMP3, selectDir } from "../api/files"
 import { useMessage } from "naive-ui"
 import type { SelectOption } from "naive-ui"
 import { dayjs } from "../utils/datetime"
 import YearSelect from "../components/common/YearSelect.vue"
 import DormPlaylistTable from "../components/dorm/DormPlaylistTable.vue"
 import { buildExportEntries, hasAnySong } from "../utils/exportEntries"
+import type { ExportEntry } from "../utils/exportEntries"
 
 
 const router = useRouter()
@@ -133,7 +134,7 @@ function datesForWeek(week: number): string[] {
 }
 
 // 编号逻辑抽到 utils/exportEntries.ts，便于单测覆盖「空时段必须占位」这条规则。
-function buildEntries(dates: string[]): { source: string; targetName: string }[] {
+function buildEntries(dates: string[]): ExportEntry[] {
   return buildExportEntries(dates, songsStore.dormSongs, settingsStore.timeSlots)
 }
 
@@ -275,9 +276,18 @@ async function doFrontendCopy(week: number, confirm: boolean) {
     let failed = 0
     for (const entry of entries) {
       try {
-        const blob = entry.source
-          ? await fetchSourceBlob(entry.source)
-          : await fetchSilentMP3(settingsStore.silentPlaceholderDuration || 30)
+        let blob: Blob
+        if (entry.sources && entry.sources.length > 1) {
+          // 同一时段多首歌：交给后端合并成一个 MP3 再写入
+          blob = await fetchMergedMP3(entry.sources)
+        } else if (entry.source) {
+          blob = await fetchSourceBlob(entry.source)
+        } else {
+          // 空时段：后端固定 17.43s（converter.DefaultSilentPlaceholder），
+          // 与后端 internal organizeService 走同一份常量——保证 SD 卡上同一
+          // 序号文件无论走哪条路径时长都对得上。
+          blob = await fetchSilentMP3()
+        }
         await writeFile(dirHandle, entry.targetName, blob)
         success++
       } catch (err) {

@@ -47,6 +47,7 @@ main.go
 - **系统交互**：执行外部命令（隐藏控制台窗口）、打开浏览器、查询 Windows 版本，统一用 `GoServer/platform/`。
 - **音频转码**：`converter/process.go` 的 `toMP3()` 会先嗅探格式（`converter/sniff.go`），解密结果已是 MP3 时直接搬运，不调 ffmpeg。重编码一首 4 分钟的歌约 4.8s，搬运 ~1ms，且能避免二次有损转码。不要改回无条件 `ConvertToMP3`。
 - **um-react 导入**：走 `POST /api/decrypt/stage/:id/import` 就地入库，**不要**改回「下载回浏览器再上传」——那样一首 12MB 的歌要在本机跑三趟共 35.6MB（~263ms vs ~67ms）。已是 MP3 时用 rename，并优先用暂存 meta 的文件名当标题以跳过 ffprobe（一次约 88ms）。
+- **换卡导出**：编号锚定「时段位置」不是歌曲（见 `Web/src/utils/exportEntries.ts`），空时段生成静音占位，否则整天空着会让后面曲序整体前移。同一时段多首歌合并成一个 MP3（`converter/merge.go`）——内置精简版 ffmpeg **没有** concat demuxer/滤镜/PCM muxer，所以用字节拼接 + 剥除后续文件的 ID3 标签，不要改成 ffmpeg concat。
 - **进程退出**：托盘、Ctrl-C、前端 `POST /api/shutdown` 三条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），不要把它挪到子 goroutine。
 
 ### 前端分层

@@ -34,15 +34,14 @@ func (s *SettingsStore) GetSettings() models.PublicSettings {
 	var public models.PublicSettings
 	s.repo.Read(func(data *repo.Data) {
 		public = models.PublicSettings{
-			TimeSlots:                 data.Settings.TimeSlots,
-			AllowTemplateJS:           data.Settings.AllowTemplateJS,
-			SilentPlaceholderDuration: data.Settings.SilentPlaceholderDuration,
-			AdminPasswordHint:         data.Settings.AdminPasswordHint,
-			Locale:                    data.Settings.Locale,
-			Version:                   data.Settings.Version,
-			DownloadURL:               data.Settings.DownloadURL,
-			BroadcastColumnMap:        ensureBroadcastColumnMap(data.Settings.BroadcastColumnMap),
-			DuplicateCheckDays:        data.Settings.DuplicateCheckDays,
+			TimeSlots:          data.Settings.TimeSlots,
+			AllowTemplateJS:    data.Settings.AllowTemplateJS,
+			AdminPasswordHint:  data.Settings.AdminPasswordHint,
+			Locale:             data.Settings.Locale,
+			Version:            data.Settings.Version,
+			DownloadURL:        data.Settings.DownloadURL,
+			BroadcastColumnMap: ensureBroadcastColumnMap(data.Settings.BroadcastColumnMap),
+			DuplicateCheckDays: data.Settings.DuplicateCheckDays,
 		}
 	})
 	if public.DuplicateCheckDays <= 0 {
@@ -75,18 +74,6 @@ func (s *SettingsStore) GetSettingsRaw() models.Settings {
 	return settings
 }
 
-// GetSilentDuration returns the silent placeholder duration in seconds.
-func (s *SettingsStore) GetSilentDuration() int {
-	var dur int
-	s.repo.Read(func(data *repo.Data) {
-		dur = data.Settings.SilentPlaceholderDuration
-	})
-	if dur <= 0 {
-		return 30
-	}
-	return dur
-}
-
 // GetTimeSlots returns a copy of all time slots.
 func (s *SettingsStore) GetTimeSlots() []models.TimeSlot {
 	var slots []models.TimeSlot
@@ -102,16 +89,6 @@ func (s *SettingsStore) UpdateSettings(req models.UpdateSettingsRequest) error {
 	return s.repo.Write(func(data *repo.Data) error {
 		if req.AllowTemplateJS != nil {
 			data.Settings.AllowTemplateJS = *req.AllowTemplateJS
-		}
-		if req.SilentPlaceholderDuration != nil {
-			v := *req.SilentPlaceholderDuration
-			if v < 1 {
-				v = 1
-			}
-			if v > 300 {
-				v = 300
-			}
-			data.Settings.SilentPlaceholderDuration = v
 		}
 		if req.AdminPasswordHint != nil {
 			data.Settings.AdminPasswordHint = *req.AdminPasswordHint

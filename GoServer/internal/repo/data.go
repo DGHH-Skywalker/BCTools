@@ -32,16 +32,15 @@ func defaultBroadcastColumnMap() map[string]string {
 // DefaultSettings returns the default settings.
 func DefaultSettings() models.Settings {
 	return models.Settings{
-		TimeSlots:                 DefaultTimeSlots(),
-		AllowTemplateJS:           false,
-		SilentPlaceholderDuration: 30,
-		AdminPasswordHash:         "",
-		AdminPasswordHint:         "",
-		Locale:                    "zh-CN",
-		Version:                   version.Version,
-		DownloadURL:               "",
-		BroadcastColumnMap:        defaultBroadcastColumnMap(),
-		DuplicateCheckDays:        30,
+		TimeSlots:          DefaultTimeSlots(),
+		AllowTemplateJS:    false,
+		AdminPasswordHash:  "",
+		AdminPasswordHint:  "",
+		Locale:             "zh-CN",
+		Version:            version.Version,
+		DownloadURL:        "",
+		BroadcastColumnMap: defaultBroadcastColumnMap(),
+		DuplicateCheckDays: 30,
 	}
 }
 

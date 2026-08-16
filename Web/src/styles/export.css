@@ -188,7 +188,9 @@
 .ex-poster-divider {
   width: 90%;
   height: 1px;
-  background: var(--theme-color);
+  /* 固定白色：海报底色是深色（--color-poster-bg #1a1a1a），
+     跟随主题色会在用户改主题后与背景对比度不足。 */
+  background: #ffffff;
   opacity: 0.6;
   margin: 24px 0 0;
 }
@@ -222,13 +224,15 @@
   align-items: stretch;
   justify-items: stretch;
   font-family: var(--font-body);
-  border: 1px solid var(--color-poster-table-border);
+  /* 固定白色：导出图片里所有分割线/边框都不允许跟随主题色——
+     海报底色是 #1a1a1a，跟随主题色在用户改主题后会出现对比度不足。 */
+  border: 1px solid #ffffff;
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .ex-poster-grid.broadcast {
-  border-color: var(--color-poster-table-border-broadcast);
+  border-color: #ffffff;
 }
 
 .ex-poster-cell {

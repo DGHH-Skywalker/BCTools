@@ -6,7 +6,6 @@ import * as settingsApi from "../api/misc"
 export const useSettingsStore = defineStore("settings", () => {
   const timeSlots = ref<TimeSlot[]>([])
   const allowTemplateJS = ref(false)
-  const silentPlaceholderDuration = ref(30)
   const version = ref("5.5.0.0")
   const downloadUrl = ref("")
   const adminPasswordHint = ref("")
@@ -21,7 +20,6 @@ export const useSettingsStore = defineStore("settings", () => {
       const s: Settings = await settingsApi.getSettings()
       timeSlots.value = s.timeSlots || []
       allowTemplateJS.value = s.allowTemplateJS
-      silentPlaceholderDuration.value = s.silentPlaceholderDuration || 30
       version.value = s.version
       downloadUrl.value = s.downloadUrl
       adminPasswordHint.value = s.adminPasswordHint
@@ -44,7 +42,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
   return {
     timeSlots, allowTemplateJS,
-    silentPlaceholderDuration, version, downloadUrl, adminPasswordHint,
+    version, downloadUrl, adminPasswordHint,
     locale, broadcastColumnMap, duplicateCheckDays, loading, fetchSettings, updateSettings,
   }
 })

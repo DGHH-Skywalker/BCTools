@@ -87,12 +87,17 @@ func (c *FFMpegConverter) ConvertToMP3(inputPath, outputPath string) error {
 	return nil
 }
 
-// GenerateSilentMP3 generates a silent MP3 file of specified duration
-func (c *FFMpegConverter) GenerateSilentMP3(outputPath string, durationSec int) error {
+// GenerateSilentMP3 用 ffmpeg anullsrc 生成指定时长的静音 MP3。
+//
+// duration 支持小数秒（time.Duration）。空时段导出的固定占位时长是
+// DefaultSilentPlaceholder（17.43s），写死在这里就是为了和「按时段位置编号」
+// 这条契约绑死——任何想要「让用户可配」的尝试都会破坏编号与曲序的对应。
+func (c *FFMpegConverter) GenerateSilentMP3(outputPath string, duration time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	dur := fmt.Sprintf("%d", durationSec)
+	// ffmpeg 的 -t 接受浮点秒（"17.43"），用 time.Duration.Seconds() 直接给小数。
+	dur := fmt.Sprintf("%.3f", duration.Seconds())
 	cmd := createCommand(ctx, c.ffmpegPath,
 		"-y",
 		"-f", "lavfi",

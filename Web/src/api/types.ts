@@ -37,7 +37,6 @@ export interface TimeSlot {
 export interface Settings {
   timeSlots: TimeSlot[]
   allowTemplateJS: boolean
-  silentPlaceholderDuration: number
   version: string
   downloadUrl: string
   adminPasswordHint: string
