@@ -1,0 +1,37 @@
+MIT License
+
+Copyright (c) 2026 Egansama
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+注意：本许可仅覆盖本仓库的源代码。
+
+以下内容不在 MIT 许可范围内，版权归各自权利人所有，商用请自行确认授权：
+
+- 中文字体：江西拙楷 3.0、方正颜宋简体、方正小标宋简、仿宋_GB2312
+  （位于 Web/public/fonts/ 与 installer/res/）
+- 图片素材：logo.png、logo-white.png、favicon.png、egansama.jpg 等
+
+内嵌的 ffmpeg/ffprobe 遵循其自身许可（LGPLv2.1+/GPLv2+，见
+GoServer/ffmpeg_bctools_mini/dist/COPYING.*）。
+
+音乐解锁能力来自 unlock-music（https://git.unlock-music.dev/um/cli），
+请仅用于解锁自己已合法购买的音乐。

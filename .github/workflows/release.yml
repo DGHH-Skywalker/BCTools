@@ -1,0 +1,96 @@
+name: Release
+
+# 打 tag 时自动构建并发布 Release。
+#
+#   git tag v5.5.0.0 && git push origin v5.5.0.0
+#
+# 不需要额外密钥：GITHUB_TOKEN 由 Actions 自动注入。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag（需已存在）"
+        required: true
+
+permissions:
+  contents: write # 创建 Release 需要写权限
+
+jobs:
+  release:
+    name: 构建并发布
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: GoServer/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: Web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 精简版 ffmpeg 不入库，需要现编。按 build.sh 哈希缓存，避免每次发版都等半小时。
+      - name: ffmpeg 缓存
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: GoServer/ffmpeg_bctools_mini/dist
+          key: ffmpeg-mini-${{ runner.os }}-${{ hashFiles('GoServer/ffmpeg_bctools_mini/build.sh') }}
+
+      - name: 安装 MSYS2（仅在未命中缓存时）
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-lame
+            git
+            make
+            pkg-config
+
+      - name: 编译 ffmpeg（仅在未命中缓存时）
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        working-directory: GoServer/ffmpeg_bctools_mini
+        run: bash build.sh
+
+      - name: 启用 corepack
+        run: corepack enable
+
+      - name: 构建
+        run: python build.py --no-mirror
+
+      - name: 计算校验和
+        shell: bash
+        working-directory: dist
+        run: |
+          sha256sum bctools.exe BCTools-Setup.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          draft: true # 先建草稿，确认后手动点发布
+          generate_release_notes: true
+          files: |
+            dist/BCTools-Setup.exe
+            dist/bctools.exe
+            dist/SHA256SUMS.txt

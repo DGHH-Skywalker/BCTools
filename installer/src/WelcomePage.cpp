@@ -16,8 +16,6 @@ constexpr wchar_t kPageClass[] = L"BCToolsWelcomePage";
 
 WelcomePage::WelcomePage(AppWindow* app) : Page(app) {
     brandColor_ = Gdiplus::Color(0, 134, 195); // #0086C3
-    badgeBgColor_ = Gdiplus::Color(230, 245, 252);
-    badgeTextColor_ = Gdiplus::Color(0, 134, 195);
 }
 
 WelcomePage::~WelcomePage() = default;
@@ -118,51 +116,6 @@ void WelcomePage::Paint(HWND hwnd, HDC hdc) {
                            (Gdiplus::REAL)(w - marginX * 2),
                            (Gdiplus::REAL)Layout::ScaleF(80));
     gfx.DrawString(APP_DISPLAY_NAME, -1, &titleFont, titleRc, &titleFmt, &titleBrush);
-
-    // "预览版" 角标（标题右侧）
-    std::wstring badgeFace = app_->Resources().GetFontFangZheng();
-    Gdiplus::Font badgeFont(badgeFace.c_str(), Layout::ScaleF(16),
-                            Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush badgeBrush(badgeTextColor_);
-    Gdiplus::SolidBrush badgeBg(badgeBgColor_);
-    const wchar_t* badgeText = L"预览版";
-
-    Gdiplus::StringFormat leftFmt;
-    leftFmt.SetAlignment(Gdiplus::StringAlignmentNear);
-    leftFmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-
-    Gdiplus::RectF measureRc(0, 0, 1000, 100);
-    gfx.MeasureString(badgeText, -1, &badgeFont, measureRc, &leftFmt, &measureRc);
-    float badgeW = measureRc.Width + Layout::ScaleF(16);
-    float badgeH = measureRc.Height + Layout::ScaleF(8);
-
-    // 计算标题实际宽高，把角标贴在标题右上角
-    Gdiplus::RectF titleMeasureRc(0, 0, 1000, 100);
-    gfx.MeasureString(APP_DISPLAY_NAME, -1, &titleFont, titleMeasureRc, &leftFmt, &titleMeasureRc);
-    float titleW = titleMeasureRc.Width;
-    float titleH = titleMeasureRc.Height;
-    float titleX = (w - titleW) / 2.0f;
-    float badgeX = titleX + titleW + Layout::ScaleF(12);
-    float badgeY = titleRc.Y + (titleRc.Height - titleH) / 2.0f;
-
-    // 若角标超出右边界则放在标题左侧
-    if (badgeX + badgeW > w - marginX) {
-        badgeX = titleX - badgeW - Layout::ScaleF(12);
-    }
-
-    Gdiplus::GraphicsPath badgePath;
-    float br = (float)Layout::Scale(4);
-    float d = br * 2.0f;
-    badgePath.AddArc(badgeX + badgeW - d, badgeY, d, d, 270.0f, 90.0f);
-    badgePath.AddArc(badgeX + badgeW - d, badgeY + badgeH - d, d, d, 0.0f, 90.0f);
-    badgePath.AddArc(badgeX, badgeY + badgeH - d, d, d, 90.0f, 90.0f);
-    badgePath.AddArc(badgeX, badgeY, d, d, 180.0f, 90.0f);
-    badgePath.CloseFigure();
-    gfx.FillPath(&badgeBg, &badgePath);
-
-    Gdiplus::RectF badgeTextRc(badgeX + Layout::ScaleF(8), badgeY,
-                               badgeW - Layout::ScaleF(16), badgeH);
-    gfx.DrawString(badgeText, -1, &badgeFont, badgeTextRc, &leftFmt, &badgeBrush);
 }
 
 void WelcomePage::OnInstallClick() {

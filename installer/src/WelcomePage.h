@@ -25,8 +25,6 @@ private:
 
     std::unique_ptr<CustomButton> btnInstall_;
     Gdiplus::Color brandColor_;
-    Gdiplus::Color badgeBgColor_;
-    Gdiplus::Color badgeTextColor_;
 };
 
 #endif // WELCOMEPAGE_H

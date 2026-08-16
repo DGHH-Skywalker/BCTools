@@ -67,7 +67,7 @@ import type { SelectOption } from "naive-ui"
 import { dayjs } from "../utils/datetime"
 import YearSelect from "../components/common/YearSelect.vue"
 import DormPlaylistTable from "../components/dorm/DormPlaylistTable.vue"
-import type { TimeSlot } from "../api/types"
+import { buildExportEntries, hasAnySong } from "../utils/exportEntries"
 
 
 const router = useRouter()
@@ -121,16 +121,6 @@ const weekOptions = computed<SelectOption[]>(() => {
   return options
 })
 
-function dayIndexFromDate(dateStr: string): number {
-  const d = dayjs(dateStr)
-  return d.day() === 0 ? 7 : d.day()
-}
-
-function slotsForDate(dateStr: string): TimeSlot[] {
-  const dayIdx = dayIndexFromDate(dateStr)
-  return settingsStore.timeSlots.filter(s => s.dayIndex === dayIdx).sort((a, b) => a.order - b.order)
-}
-
 function datesForWeek(week: number): string[] {
   const start = dayjs(`${selectedYear.value}-01-04`).startOf("isoWeek").add(week - 1, "week")
   const dates: string[] = []
@@ -142,25 +132,9 @@ function datesForWeek(week: number): string[] {
   return dates
 }
 
+// 编号逻辑抽到 utils/exportEntries.ts，便于单测覆盖「空时段必须占位」这条规则。
 function buildEntries(dates: string[]): { source: string; targetName: string }[] {
-  const entries: { source: string; targetName: string }[] = []
-  let seq = 1
-  for (const date of dates) {
-    const slots = slotsForDate(date)
-    for (const slot of slots) {
-      const slotSongs = songsStore.dormSongs
-        .filter(s => s.date === date && s.timeSlotId === slot.id)
-        .sort((a, b) => a.id - b.id)
-      for (const song of slotSongs) {
-        entries.push({
-          source: song.filePath || "",
-          targetName: `${String(seq).padStart(2, "0")}.mp3`,
-        })
-        seq++
-      }
-    }
-  }
-  return entries
+  return buildExportEntries(dates, songsStore.dormSongs, settingsStore.timeSlots)
 }
 
 async function browse() {
@@ -225,7 +199,7 @@ async function doPendingCopy(confirm: boolean) {
 async function doBackendCopy(week: number, confirm: boolean) {
   const dates = datesForWeek(week)
   const entries = buildEntries(dates)
-  if (entries.length === 0) {
+  if (!hasAnySong(entries)) {
     message.warning(t("organize.noSongsThisWeek"))
     pendingWeek.value = null
     return
@@ -263,7 +237,7 @@ async function doFrontendCopy(week: number, confirm: boolean) {
   if (!dirHandle) return
   const dates = datesForWeek(week)
   const entries = buildEntries(dates)
-  if (entries.length === 0) {
+  if (!hasAnySong(entries)) {
     message.warning(t("organize.noSongsThisWeek"))
     pendingWeek.value = null
     return

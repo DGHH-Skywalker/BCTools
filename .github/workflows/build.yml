@@ -1,0 +1,186 @@
+name: Build
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+# 只需读取仓库内容；不写回仓库，也不需要额外密钥。
+permissions:
+  contents: read
+
+concurrency:
+  # 同一分支的新提交会取消仍在跑的旧构建，避免排队浪费
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 测试：跨平台可跑的部分（不需要 ffmpeg 二进制、不需要 MinGW）
+  # ---------------------------------------------------------------------------
+  test:
+    name: 测试
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # um-react 是 submodule，前端构建需要它
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: GoServer/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: Web/package-lock.json
+
+      - name: 后端 vet
+        working-directory: GoServer
+        run: go vet ./...
+
+      - name: 后端测试
+        working-directory: GoServer
+        run: go test ./...
+
+      - name: 前端依赖
+        working-directory: Web
+        run: npm ci --legacy-peer-deps
+
+      - name: 前端类型检查
+        working-directory: Web
+        run: npm run type-check
+
+      - name: 前端测试
+        working-directory: Web
+        run: npm run test
+
+  # ---------------------------------------------------------------------------
+  # 构建精简版 ffmpeg/ffprobe。
+  #
+  # 这两个二进制不入库（.gitignore 排除了 *.exe），所以 CI 必须自己编。
+  # 编译很慢（约 20-40 分钟），因此按 build.sh 的哈希做缓存：脚本没变就直接复用。
+  # ---------------------------------------------------------------------------
+  ffmpeg:
+    name: 精简版 ffmpeg
+    runs-on: windows-latest
+    outputs:
+      cache-key: ${{ steps.key.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 计算缓存 key
+        id: key
+        shell: bash
+        run: echo "value=ffmpeg-mini-${{ runner.os }}-$(sha256sum GoServer/ffmpeg_bctools_mini/build.sh | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: 尝试命中缓存
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: GoServer/ffmpeg_bctools_mini/dist
+          key: ${{ steps.key.outputs.value }}
+
+      - name: 安装 MSYS2（仅在未命中缓存时）
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-lame
+            git
+            make
+            pkg-config
+
+      - name: 编译（仅在未命中缓存时）
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        working-directory: GoServer/ffmpeg_bctools_mini
+        run: bash build.sh
+
+      - name: 校验产物
+        shell: bash
+        working-directory: GoServer/ffmpeg_bctools_mini/dist
+        run: |
+          ls -lh ffmpeg.exe ffprobe.exe
+          ./ffmpeg.exe -hide_banner -encoders | grep -q libmp3lame
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-mini
+          path: GoServer/ffmpeg_bctools_mini/dist/*.exe
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 完整构建：前端 + um-react + 后端 + 安装程序
+  # ---------------------------------------------------------------------------
+  build:
+    name: 完整构建
+    needs: [test, ffmpeg]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: GoServer/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: Web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 取回精简版 ffmpeg
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-mini
+          path: GoServer/ffmpeg_bctools_mini/dist
+
+      - name: 启用 corepack（um-react 用 pnpm）
+        run: corepack enable
+
+      # windows-latest 自带 MinGW（用于编译 C++ 安装程序），确认一下
+      - name: 检查 g++
+        run: g++ --version
+
+      - name: 构建
+        run: python build.py --no-mirror
+
+      - name: 列出产物
+        shell: bash
+        run: ls -lh dist/
+
+      - name: 上传主程序
+        uses: actions/upload-artifact@v4
+        with:
+          name: bctools-${{ github.sha }}
+          path: |
+            dist/bctools.exe
+            dist/bctool_dev.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 上传安装程序
+        uses: actions/upload-artifact@v4
+        with:
+          name: BCTools-Setup-${{ github.sha }}
+          path: dist/BCTools-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
