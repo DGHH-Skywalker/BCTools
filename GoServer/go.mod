@@ -3,6 +3,7 @@ module broadcast-tool
 go 1.25.0
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/google/uuid v1.6.0
 	github.com/natefinch/lumberjack v2.0.0+incompatible
@@ -20,6 +21,7 @@ require (
 	github.com/go-flac/flacpicture v0.3.0 // indirect
 	github.com/go-flac/flacvorbis v0.2.0 // indirect
 	github.com/go-flac/go-flac v1.0.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect

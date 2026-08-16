@@ -1,11 +1,43 @@
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
-import { Segment, useDefault } from "segmentit"
 import type { Song, TimeSlot } from "../api/types"
+import { dayjs, dayIndexFromDate, parseTime } from "./datetime"
 
-dayjs.extend(isoWeek)
+// segmentit 自带的中文词典有 260 万字符（gzip 后约 1.25 MB），且构造 Segment 会
+// 同步解析全部词条。静态 import 会把它焊进 /export 与 /organize 的路由块，
+// 页面必须先下载完整个词典才能渲染。
+//
+// 因此改为动态 import：词典成为独立块，按需拉取。
+// segmentChineseTitle 保持同步（调用方在 computed 里同步用它），词典未就绪时
+// 原样返回标题——只是少了按词断行的零宽空格，不影响正确性。
+// 需要分词生效的调用方应先 await ensureSegmenter()。
+type Segmenter = { doSegment: (text: string) => unknown[] }
 
-const segment = useDefault(new Segment())
+let segmenter: Segmenter | null = null
+let loading: Promise<void> | null = null
+
+/** 预加载中文分词词典。重复调用共享同一次加载。 */
+export function ensureSegmenter(): Promise<void> {
+  if (segmenter) return Promise.resolve()
+  if (!loading) {
+    loading = import("segmentit")
+      .then((m) => {
+        segmenter = m.useDefault(new m.Segment()) as Segmenter
+      })
+      .catch((err) => {
+        // 加载失败不该让导出流程崩掉，退化成不分词。
+        console.warn("加载中文分词词典失败，标题将不做分词断行:", err)
+        loading = null
+      })
+  }
+  return loading
+}
+
+/** 词典是否已就绪。供 UI 在加载完成后触发重新渲染。 */
+export function isSegmenterReady(): boolean {
+  return segmenter !== null
+}
+
+// dayIndexFromDate / parseTime 从 ./datetime 转出，保持既有 import 路径不变。
+export { dayIndexFromDate, parseTime }
 
 export interface BuildDormTableOptions {
   title?: string | null
@@ -21,17 +53,6 @@ export function escapeHtml(text: string): string {
   return div.innerHTML
 }
 
-export function dayIndexFromDate(dateStr: string): number {
-  const d = dayjs(dateStr)
-  return d.day() === 0 ? 7 : d.day()
-}
-
-// 把 "HH:MM" 转为可比较的毫秒数，用于按时分先后排序。
-export function parseTime(time: string): number {
-  const [h, m] = (time || "").split(":").map(Number)
-  return new Date(1970, 0, 1, h || 0, m || 0).getTime()
-}
-
 // 带圈数字序号（用于同时间段多首歌时的前缀），1-20 用 Unicode 带圈数字，超出回退到普通数字。
 export function toCircledNumber(num: number): string {
   if (num >= 1 && num <= 10) {
@@ -44,10 +65,12 @@ export function toCircledNumber(num: number): string {
 }
 
 // 对中文标题进行分词，在词组之间插入零宽空格，使导出图片按词组断行。
+// 词典未加载时原样返回（见 ensureSegmenter）。
 export function segmentChineseTitle(title: string): string {
   if (!title) return title
+  if (!segmenter) return title
   try {
-    const segs = segment.doSegment(title)
+    const segs = segmenter.doSegment(title)
     return segs.map((s: any) => (s && typeof s === "object" ? s.w : String(s))).join("​")
   } catch {
     return title
@@ -65,10 +88,6 @@ export function formatExportTitle(title: string): string {
 function slotsForDate(dateStr: string, timeSlots: TimeSlot[]): TimeSlot[] {
   const dayIdx = dayIndexFromDate(dateStr)
   return timeSlots.filter(s => s.dayIndex === dayIdx).sort((a, b) => a.order - b.order)
-}
-
-function isMultiWeek(dates: string[]): boolean {
-  return new Set(dates.map(d => dayjs(d).isoWeek())).size > 1
 }
 
 function dateCellHtml(date: string, weekdayShortName: (dayIndex: number) => string): string {

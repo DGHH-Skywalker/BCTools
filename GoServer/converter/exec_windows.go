@@ -6,9 +6,9 @@ import (
 	"context"
 	"os/exec"
 
-	"broadcast-tool/runner"
+	"broadcast-tool/platform"
 )
 
 func createCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
-	return runner.CommandContext(ctx, name, args...)
+	return platform.CommandContext(ctx, name, args...)
 }

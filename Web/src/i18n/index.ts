@@ -1,6 +1,7 @@
 import { ref } from "vue"
 import zhCN from "../locales/zh-CN.json"
 import en from "../locales/en.json"
+import { STORAGE_KEYS, writeRaw } from "../utils/persist"
 
 const messages: Record<string, any> = { "zh-CN": zhCN, en }
 // 当前版本仅支持中文，保留 i18n 结构以便后续扩展
@@ -25,7 +26,7 @@ export function useI18n() {
 
   const setLocale = (locale: "zh-CN" | "en") => {
     currentLocale.value = locale
-    localStorage.setItem("locale", locale)
+    writeRaw(STORAGE_KEYS.locale, locale)
   }
 
   const weekdayName = (dayIndex: number): string => {

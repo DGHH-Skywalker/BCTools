@@ -38,8 +38,8 @@ vi.mock("@/api/songs", () => {
   }
 })
 
-// Mock settings API
-vi.mock("@/api/settings", () => ({
+// Mock settings API（设置相关端点已并入 api/misc）
+vi.mock("@/api/misc", () => ({
   getSettings: vi.fn(async () => ({
     timeSlots: [{ id: "slot-1", dayIndex: 1, time: "12:00", order: 1 }],
     allowTemplateJS: false,

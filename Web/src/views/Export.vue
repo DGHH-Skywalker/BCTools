@@ -62,15 +62,13 @@ import WeekTransferPanel from "../components/export/WeekTransferPanel.vue"
 import YearSelect from "../components/common/YearSelect.vue"
 import ExportActions from "../components/export/ExportActions.vue"
 import ExportAdvancedDrawer from "../components/export/ExportAdvancedDrawer.vue"
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
+import { dayjs } from "../utils/datetime"
 import { useMessage } from "naive-ui"
 import type { SongType } from "../api/types"
 import type { TransferRenderSourceList } from "naive-ui"
 import { Setting } from "@icon-park/vue-next"
-import SettingsFab from "../components/common/SettingsFab.vue"
+import SettingsFab from "../components/ui/SettingsFab.vue"
 
-dayjs.extend(isoWeek)
 
 interface DayOption {
   label: string

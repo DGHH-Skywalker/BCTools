@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"broadcast-tool/network"
+	"broadcast-tool/platform"
 	"broadcast-tool/response"
 
 	"github.com/skip2/go-qrcode"
@@ -31,7 +32,7 @@ func (h *NetworkHandler) HandleGetInfo(w http.ResponseWriter, r *http.Request) {
 		host = r.RemoteAddr
 	}
 	isLocalRequest := network.IsLocalhost(host)
-	isWindows, windowsVersion := network.GetWindowsInfo()
+	isWindows, windowsVersion := platform.WindowsInfo()
 
 	response.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"ip":             ip,

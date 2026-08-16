@@ -7,19 +7,26 @@ import (
 )
 
 type HandlerSet struct {
-	Songs    *handlers.SongHandler
-	Files    *handlers.FileHandler
-	Auth     *handlers.AuthHandler
-	Settings *handlers.SettingsHandler
-	Snapshot *handlers.SnapshotHandler
-	Update   *handlers.UpdateHandler
-	Network  *handlers.NetworkHandler
-	System   *handlers.SystemHandler
-	Decrypt  *handlers.DecryptHandler
+	Songs     *handlers.SongHandler
+	Files     *handlers.FileHandler
+	Auth      *handlers.AuthHandler
+	Settings  *handlers.SettingsHandler
+	Snapshot  *handlers.SnapshotHandler
+	Update    *handlers.UpdateHandler
+	Network   *handlers.NetworkHandler
+	System    *handlers.SystemHandler
+	Decrypt   *handlers.DecryptHandler
+	Lifecycle *handlers.LifecycleHandler
 }
 
 func RegisterRoutes(r chi.Router, hs HandlerSet) {
 	r.Route("/api", func(r chi.Router) {
+		if hs.Lifecycle != nil {
+			r.Get("/health", hs.Lifecycle.HandleHealth)
+			r.Get("/lifecycle/watch", hs.Lifecycle.HandleWatch)
+			r.Post("/shutdown", hs.Lifecycle.HandleShutdown)
+			r.Post("/close-browser", hs.Lifecycle.HandleCloseBrowser)
+		}
 		r.Route("/songs", func(r chi.Router) {
 			r.Get("/", hs.Songs.HandleList)
 			r.Get("/{id}", hs.Songs.HandleGet)

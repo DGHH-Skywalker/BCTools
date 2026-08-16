@@ -1,6 +1,7 @@
 import { defineStore } from "pinia"
 import { ref, watch } from "vue"
 import type { SongType } from "../api/types"
+import { STORAGE_KEYS, readJSON, writeJSON } from "../utils/persist"
 
 export type VacationBadge = "none" | "summer" | "winter"
 
@@ -15,7 +16,6 @@ interface AdvancedSettings {
   backgroundImageBroadcast: string | null
 }
 
-const STORAGE_KEY = "export-advanced-settings"
 const DEFAULT_BLUR = 12
 const DEFAULT_QUOTE = "人生南北多歧路 君向潇湘我向秦"
 
@@ -25,10 +25,8 @@ function clampBlur(v: number): number {
 }
 
 function loadAdvancedSettings(): AdvancedSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
+  const parsed = readJSON<any>(STORAGE_KEYS.exportAdvanced)
+  if (parsed) {
       // 兼容旧版本：旧的 backgroundImage 迁移到宿舍背景
       const legacyBg = typeof parsed.backgroundImage === "string" ? parsed.backgroundImage : null
       // 兼容旧版本：旧的 posterQuote 迁移到宿舍文案，旧的 posterBlur 迁移到宿舍模糊
@@ -44,9 +42,6 @@ function loadAdvancedSettings(): AdvancedSettings {
         backgroundImageDorm: typeof parsed.backgroundImageDorm === "string" ? parsed.backgroundImageDorm : legacyBg,
         backgroundImageBroadcast: typeof parsed.backgroundImageBroadcast === "string" ? parsed.backgroundImageBroadcast : null,
       }
-    }
-  } catch {
-    // ignore
   }
   return {
     vacationBadge: "none",
@@ -61,11 +56,7 @@ function loadAdvancedSettings(): AdvancedSettings {
 }
 
 function saveAdvancedSettings(settings: AdvancedSettings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-  } catch {
-    // ignore
-  }
+  writeJSON(STORAGE_KEYS.exportAdvanced, settings)
 }
 
 export const useExportStore = defineStore("export", () => {

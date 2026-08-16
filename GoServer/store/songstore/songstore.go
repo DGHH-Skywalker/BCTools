@@ -76,15 +76,36 @@ func (s *SongStore) GetSongByID(id int64) (models.Song, string, error) {
 func (s *SongStore) GetSongsByType(songType string, dates []string) []models.Song {
 	var result []models.Song
 	var slotTime map[string]int
+
+	// 在持锁期间就按 dates 过滤，避免为随后要丢弃的歌复制结构体、
+	// 计算 weekday（CalcWeekday 要解析日期字符串）。
+	var dateSet map[string]bool
+	if len(dates) > 0 {
+		dateSet = make(map[string]bool, len(dates))
+		for _, d := range dates {
+			dateSet[d] = true
+		}
+	}
+
 	s.repo.Read(func(data *repo.Data) {
+		var src []models.Song
 		switch songType {
 		case "dorm":
-			result = cloneSongsWithWeekday(data.DormSongs)
+			src = data.DormSongs
 			slotTime = buildSlotTimeMap(data.Settings.TimeSlots)
 		case "broadcast":
-			result = cloneSongsWithWeekday(data.BroadcastSongs)
+			src = data.BroadcastSongs
 		default:
-			result = nil
+			return
+		}
+		// 即使 src 为空也要返回非 nil，以便调用方区分「无此类型」与「该类型没有歌」。
+		result = make([]models.Song, 0, len(src))
+		for _, song := range src {
+			if dateSet != nil && !dateSet[song.Date] {
+				continue
+			}
+			song.Weekday = repo.CalcWeekday(song.Date)
+			result = append(result, song)
 		}
 	})
 	if result == nil {
@@ -95,20 +116,7 @@ func (s *SongStore) GetSongsByType(songType string, dates []string) []models.Son
 			return dormLess(result[i], result[j], slotTime)
 		})
 	}
-	if len(dates) == 0 {
-		return result
-	}
-	dateSet := make(map[string]bool, len(dates))
-	for _, d := range dates {
-		dateSet[d] = true
-	}
-	filtered := make([]models.Song, 0, len(result))
-	for _, song := range result {
-		if dateSet[song.Date] {
-			filtered = append(filtered, song)
-		}
-	}
-	return filtered
+	return result
 }
 
 // IsSongsEmpty checks if both song lists are empty.

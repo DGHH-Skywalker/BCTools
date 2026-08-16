@@ -6,17 +6,16 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
-	"broadcast-tool/browser"
 	"broadcast-tool/converter"
 	"broadcast-tool/handlers"
 	"broadcast-tool/internal/binembed"
@@ -26,12 +25,14 @@ import (
 	"broadcast-tool/middleware"
 	"broadcast-tool/network"
 	"broadcast-tool/paths"
+	"broadcast-tool/platform"
 	"broadcast-tool/routes"
 	"broadcast-tool/server"
 	"broadcast-tool/store/deletedlogstore"
 	"broadcast-tool/store/settingstore"
 	"broadcast-tool/store/snapshotstore"
 	"broadcast-tool/store/songstore"
+	"broadcast-tool/tray"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/natefinch/lumberjack"
@@ -99,7 +100,7 @@ func main() {
 	// 普通模式：后端已存在则只打开浏览器并退出
 	if !*devMode && running {
 		url := fmt.Sprintf("http://localhost:%d/", port)
-		if err := browser.Open(url); err != nil {
+		if err := platform.OpenBrowser(url); err != nil {
 			log.Printf("Failed to open browser: %v", err)
 		}
 		return
@@ -115,11 +116,29 @@ func main() {
 		}
 	}
 
-	runBackend(appDataDir, port, true)
+	shutdown := runBackend(appDataDir, port, true)
+
+	// 主 goroutine 交给托盘：systray 在 init() 里 LockOSThread，
+	// 消息循环只能跑在启动它的那个 OS 线程上。
+	// tray.Run 阻塞至用户选择「退出程序」或收到系统信号。
+	tray.Run(tray.Config{
+		Tooltip: fmt.Sprintf("小播点歌工具 v%s — 左键打开界面", version.Version),
+		OnOpen: func() {
+			url := fmt.Sprintf("http://localhost:%d/", port)
+			if err := platform.OpenBrowser(url); err != nil {
+				log.Printf("Failed to open browser: %v", err)
+			}
+		},
+		OnExit: shutdown,
+	})
+
+	shutdown()
+	log.Println("Server stopped")
 }
 
-// runBackend 初始化并运行后端服务
-func runBackend(appDataDir string, port int, shouldOpenBrowser bool) {
+// runBackend 初始化并启动后端服务，返回一个幂等的关闭函数。
+// 它不再阻塞——主 goroutine 要留给托盘消息循环。
+func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown func()) {
 	// 1. Init app data directories
 	for _, dir := range []string{
 		appDataDir,
@@ -201,36 +220,26 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) {
 
 	log.Println("SECURITY NOTICE: This release does not implement backend session authentication for sensitive endpoints. Any device that can reach this server port may call admin interfaces. Run only in trusted local networks.")
 
-	// Health check
-	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	// Close-browser endpoint: only allow localhost; does NOT exit the backend
-	r.Post("/api/close-browser", func(w http.ResponseWriter, r *http.Request) {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil || !network.IsLocalhost(host) {
-			log.Printf("Close-browser request rejected from %s", r.RemoteAddr)
-			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
-			return
-		}
-		log.Println("Close-browser requested via API")
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
-	})
-
 	// 8. API routes
+	// lifecycle 需要引用下方才创建的 shutdown，先用间接层打破循环依赖。
+	var requestShutdown func()
+	lifecycle := handlers.NewLifecycleHandler(func() {
+		if requestShutdown != nil {
+			requestShutdown()
+		}
+	})
+
 	routes.RegisterRoutes(r, routes.HandlerSet{
-		Songs:    handlers.NewSongHandler(songStore, snapshotStore),
-		Files:    handlers.NewFileHandler(appDataDir, settingsStore, conv),
-		Auth:     handlers.NewAuthHandler(settingsStore),
-		Settings: handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
-		Snapshot: handlers.NewSnapshotHandler(snapshotStore),
-		Update:   handlers.NewUpdateHandler(settingsStore),
-		Network:  handlers.NewNetworkHandler(port),
-		System:   handlers.NewSystemHandler(appDataDir, version.Version),
-		Decrypt:  handlers.NewDecryptHandler(appDataDir),
+		Songs:     handlers.NewSongHandler(songStore, snapshotStore),
+		Files:     handlers.NewFileHandler(appDataDir, settingsStore, conv),
+		Auth:      handlers.NewAuthHandler(settingsStore),
+		Settings:  handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
+		Snapshot:  handlers.NewSnapshotHandler(snapshotStore),
+		Update:    handlers.NewUpdateHandler(settingsStore),
+		Network:   handlers.NewNetworkHandler(port),
+		System:    handlers.NewSystemHandler(appDataDir, version.Version),
+		Decrypt:   handlers.NewDecryptHandler(appDataDir),
+		Lifecycle: lifecycle,
 	})
 
 	// 10. Static file serving for frontend SPA
@@ -265,29 +274,59 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) {
 		launcher.SafeGo("browser", func() {
 			time.Sleep(500 * time.Millisecond)
 			url := fmt.Sprintf("http://localhost:%d/", port)
-			if err := browser.Open(url); err != nil {
+			if err := platform.OpenBrowser(url); err != nil {
 				log.Printf("Failed to open browser: %v", err)
 			}
 		})
 	}
 
-	<-quit
-	log.Println("Shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	server.Shutdown(ctx)
-	log.Println("Server stopped")
+	// 13. 关闭流程。用 sync.Once 保证幂等：托盘退出、Ctrl-C、前端请求
+	// 三条路径可能并发触发。
+	var once sync.Once
+	shutdown = func() {
+		once.Do(func() {
+			log.Println("Shutting down...")
 
-	// 一次性测试版：退出时清理临时数据目录，不留痕迹
-	if ephemeralMode {
-		log.SetOutput(os.Stderr) // 切离日志文件，避免占用导致删除失败
-		logFile.Close()
-		if rmErr := os.RemoveAll(appDataDir); rmErr != nil {
-			log.Printf("清理临时目录失败: %v", rmErr)
-		} else {
-			log.Printf("已清理临时数据目录: %s", appDataDir)
-		}
+			// 先通知前端「要关了」，让已打开的页面自行 window.close()。
+			// 浏览器普遍拦截脚本关闭非脚本打开的标签页，因此这是 best-effort：
+			// 给一小段时间就继续退出，绝不因为关不掉页面而卡住。
+			lifecycle.NotifyClosing()
+			time.Sleep(300 * time.Millisecond)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := server.Shutdown(ctx); err != nil {
+				log.Printf("HTTP shutdown error: %v", err)
+			}
+
+			// 一次性测试版：退出时清理临时数据目录，不留痕迹
+			if ephemeralMode {
+				log.SetOutput(os.Stderr) // 切离日志文件，避免占用导致删除失败
+				logFile.Close()
+				if rmErr := os.RemoveAll(appDataDir); rmErr != nil {
+					log.Printf("清理临时目录失败: %v", rmErr)
+				} else {
+					log.Printf("已清理临时数据目录: %s", appDataDir)
+				}
+			}
+		})
 	}
+	requestShutdown = func() {
+		shutdown()
+		// 前端请求关闭时，托盘消息循环还阻塞在主 goroutine 上，
+		// 需要显式收起托盘，否则进程不会退出。
+		tray.Stop()
+	}
+
+	// 信号退出走同一条关闭路径。
+	launcher.SafeGo("signal-watch", func() {
+		<-quit
+		log.Println("Received termination signal")
+		shutdown()
+		tray.Stop()
+	})
+
+	return shutdown
 }
 
 // cleanupStaleEphemeralDirs 清理 %TEMP% 下残留的旧 BCTools-test-* 目录

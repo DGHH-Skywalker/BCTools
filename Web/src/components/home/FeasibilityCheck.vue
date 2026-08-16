@@ -41,7 +41,7 @@
 import { ref, onMounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../../i18n"
-import { getSystemStatus } from "../../api/system"
+import { getSystemStatus } from "../../api/misc"
 import { CheckOne, CloseOne, MoreOne } from "@icon-park/vue-next"
 
 type CheckStatus = "idle" | "running" | "pass" | "fail"

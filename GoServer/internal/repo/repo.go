@@ -114,14 +114,15 @@ func (r *Repository) loadOrInit() error {
 		r.data.BroadcastSongs[i].Weekday = ""
 	}
 
-	// Ensure default time slots exist even in older data files.
-	originalSlotCount := len(r.data.Settings.TimeSlots)
+	// Seed default time slots only for legacy data files missing the field entirely.
+	// 用 nil 判断而非数量比较：用户清空或改动时段后不应被默认值覆盖。
+	needSeedTimeSlots := r.data.Settings.TimeSlots == nil
 	r.data.Settings.TimeSlots = EnsureDefaultTimeSlots(r.data.Settings.TimeSlots)
-	if len(r.data.Settings.TimeSlots) != originalSlotCount {
+	if needSeedTimeSlots {
 		if err := r.atomicWrite(); err != nil {
 			return fmt.Errorf("migrate default time slots: %w", err)
 		}
-		r.logger("migrated default time slots: added %d slots", len(r.data.Settings.TimeSlots)-originalSlotCount)
+		r.logger("seeded %d default time slots for legacy data file", len(r.data.Settings.TimeSlots))
 	}
 
 	// Migrate legacy broadcast songs without a period field.

@@ -228,7 +228,10 @@
     "duplicateWarning": "检测到 {date} 已存在“{title}”，疑似重复，请核实",
     "unassigned": "未分配时段",
     "dragSort": "拖拽排序",
-    "assignSlot": "设置时段"
+    "assignSlot": "设置时段",
+    "pendingCard": "待分配",
+    "pendingCardHint": "拖拽到左侧某天的时段，或点歌名旁的按钮指定时段",
+    "pendingCardEmpty": "本周没有未分配时段的歌曲"
   },
   "guide": {
     "title": "软件指南",

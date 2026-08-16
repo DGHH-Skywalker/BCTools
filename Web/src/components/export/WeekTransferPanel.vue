@@ -32,11 +32,9 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
+import { dayjs } from "../../utils/datetime"
 import { NCollapse, NCollapseItem, NEmpty } from "naive-ui"
 
-dayjs.extend(isoWeek)
 
 interface DayOption {
   label: string

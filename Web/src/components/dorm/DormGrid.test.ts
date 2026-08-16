@@ -174,4 +174,91 @@ describe("DormGrid", () => {
       { date: "2026-07-27" },
     ])
   })
+
+  it("collects unassigned songs into the 8th pending card, with no per-day unassigned section", async () => {
+    const settingsStore = useSettingsStore()
+    settingsStore.timeSlots = mockSlots
+
+    // ISO week of 2026-07-26 (Mon 07-20 .. Sun 07-26): 稻香 has timeSlotId null.
+    const weekDates: string[] = []
+    let cur = dayjs("2026-07-26").startOf("isoWeek")
+    const end = dayjs("2026-07-26").endOf("isoWeek")
+    while (cur.isBefore(end) || cur.isSame(end, "day")) {
+      weekDates.push(cur.format("YYYY-MM-DD"))
+      cur = cur.add(1, "day")
+    }
+
+    const wrapper = mount(DormGrid, { props: { weekDates }, ...globalStubs })
+    await flushPromises()
+
+    // 8 cards: 7 days + 1 pending
+    expect(wrapper.findAll(".dorm-day-card").length).toBe(8)
+    expect(wrapper.findAll(".dorm-pending-card").length).toBe(1)
+
+    // The unassigned song lives in the pending card, not in a day card.
+    expect(wrapper.find(".dorm-pending-card").html()).toContain("稻香")
+    // 未分配 must no longer appear as a per-day section heading.
+    const sectionTitles = wrapper.findAll(".slot-section-title").map((n) => n.text())
+    expect(sectionTitles).not.toContain("未分配时段")
+  })
+
+  it("song assigned to a deleted time slot still shows up in the pending card", async () => {
+    const settingsStore = useSettingsStore()
+    // slot-2 is intentionally absent: song id=3 (七里香) references a deleted slot.
+    settingsStore.timeSlots = [{ id: "slot-1", dayIndex: 7, time: "12:00", order: 1 }]
+
+    const weekDates: string[] = []
+    let cur = dayjs("2026-07-27").startOf("isoWeek")
+    const end = dayjs("2026-07-27").endOf("isoWeek")
+    while (cur.isBefore(end) || cur.isSame(end, "day")) {
+      weekDates.push(cur.format("YYYY-MM-DD"))
+      cur = cur.add(1, "day")
+    }
+
+    const wrapper = mount(DormGrid, { props: { weekDates }, ...globalStubs })
+    await flushPromises()
+
+    // Orphaned slot reference must not make the song disappear from the UI.
+    expect(wrapper.find(".dorm-pending-card").html()).toContain("七里香")
+  })
+
+  it("slot button label follows the song's current slot after it changes", async () => {
+    const songsStore = useSongsStore()
+    const settingsStore = useSettingsStore()
+    settingsStore.timeSlots = [
+      { id: "slot-a", dayIndex: 1, time: "06:35", order: 1 },
+      { id: "slot-b", dayIndex: 1, time: "13:55", order: 2 },
+    ]
+
+    const weekDates: string[] = []
+    let cur = dayjs("2026-07-27").startOf("isoWeek")
+    const end = dayjs("2026-07-27").endOf("isoWeek")
+    while (cur.isBefore(end) || cur.isSame(end, "day")) {
+      weekDates.push(cur.format("YYYY-MM-DD"))
+      cur = cur.add(1, "day")
+    }
+
+    const wrapper = mount(DormGrid, { props: { weekDates }, ...globalStubs })
+    await flushPromises()
+
+    songsStore.dormSongs = [
+      { id: 10, date: "2026-07-27", weekday: 1, title: "回归歌", artist: "", remark: "", filePath: "", timeSlotId: "slot-a", createdAt: "" } as any,
+    ]
+    await flushPromises()
+    expect(wrapper.html()).toContain("06:35")
+
+    // Move it to 13:55 — the button next to the title must follow, not stay on 06:35.
+    songsStore.dormSongs = [
+      { id: 10, date: "2026-07-27", weekday: 1, title: "回归歌", artist: "", remark: "", filePath: "", timeSlotId: "slot-b", createdAt: "" } as any,
+    ]
+    await flushPromises()
+
+    // Only one song is present, so the sole rendered row is the one under test.
+    // (The title lives in an <input> value, not in text content.)
+    const rows = wrapper.findAll(".song-row")
+    expect(rows.length).toBe(1)
+    const label = rows[0].findAll("button").map((b) => b.text()).join(" ")
+    expect(label).toContain("13:55")
+    expect(label).not.toContain("06:35")
+  })
 })

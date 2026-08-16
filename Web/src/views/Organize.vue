@@ -64,13 +64,11 @@ import { useSettingsStore } from "../stores/settings"
 import { organizeFiles, fetchSilentMP3, selectDir } from "../api/files"
 import { useMessage } from "naive-ui"
 import type { SelectOption } from "naive-ui"
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
+import { dayjs } from "../utils/datetime"
 import YearSelect from "../components/common/YearSelect.vue"
 import DormPlaylistTable from "../components/dorm/DormPlaylistTable.vue"
 import type { TimeSlot } from "../api/types"
 
-dayjs.extend(isoWeek)
 
 const router = useRouter()
 const { isDark } = useTheme()

@@ -201,3 +201,56 @@ func TestReorderSongsIsolatedToSlot(t *testing.T) {
 		t.Fatalf("slotB should be untouched = %q, want X,Y", got)
 	}
 }
+
+// GetSongsByType 的 dates 过滤路径：原实现先全量克隆再过滤，现改为过滤后再克隆。
+// 这里锁定行为——只返回指定日期、weekday 仍被计算、排序仍生效。
+func TestGetSongsByTypeFiltersByDates(t *testing.T) {
+	s, _ := newTestSongStore(t)
+	for _, d := range []string{"2026-07-20", "2026-07-21", "2026-07-22"} {
+		if _, err := s.AddSong(models.CreateSongRequest{Type: "dorm", Date: d, Title: "T-" + d}); err != nil {
+			t.Fatalf("AddSong %s: %v", d, err)
+		}
+	}
+
+	got := s.GetSongsByType("dorm", []string{"2026-07-21", "2026-07-22"})
+	if len(got) != 2 {
+		t.Fatalf("expected 2 songs for the 2 requested dates, got %d", len(got))
+	}
+	for _, song := range got {
+		if song.Date == "2026-07-20" {
+			t.Fatalf("returned a song outside the requested dates: %s", song.Date)
+		}
+		// 过滤先于克隆，但保留下来的歌仍必须带计算出的 weekday。
+		if song.Weekday == "" {
+			t.Fatalf("song %s missing computed weekday", song.Date)
+		}
+	}
+	// 结果必须按日期升序（dormLess 的首要键）。
+	if got[0].Date > got[1].Date {
+		t.Fatalf("results not sorted by date: %s before %s", got[0].Date, got[1].Date)
+	}
+}
+
+// 请求一个没有任何歌的日期时，必须返回空切片而不是 nil，
+// 以便 handler 序列化成 [] 而不是 null。
+func TestGetSongsByTypeUnmatchedDateReturnsEmptyNotNil(t *testing.T) {
+	s, _ := newTestSongStore(t)
+	if _, err := s.AddSong(models.CreateSongRequest{Type: "dorm", Date: "2026-07-20", Title: "T"}); err != nil {
+		t.Fatalf("AddSong: %v", err)
+	}
+	got := s.GetSongsByType("dorm", []string{"2030-01-01"})
+	if got == nil {
+		t.Fatal("expected non-nil empty slice, got nil (would serialize as JSON null)")
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected 0 songs, got %d", len(got))
+	}
+}
+
+// 未知类型必须返回 nil，与过滤到 0 条区分开。
+func TestGetSongsByTypeUnknownTypeReturnsNil(t *testing.T) {
+	s, _ := newTestSongStore(t)
+	if got := s.GetSongsByType("nonsense", nil); got != nil {
+		t.Fatalf("expected nil for unknown type, got %#v", got)
+	}
+}

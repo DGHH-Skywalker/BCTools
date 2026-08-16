@@ -8,6 +8,8 @@
 |------|------|
 | 后端主程序 | `GoServer/main.go` |
 | 路由注册 | `GoServer/routes/routes.go` |
+| 托盘控件 | `GoServer/tray/`（Windows systray，左键开页/右键菜单） |
+| 进程生命周期 | `GoServer/handlers/lifecycle.go`（health / watch / shutdown） |
 | 前端入口 | `Web/src/main.ts` |
 | 前端路由 | `Web/src/router/index.ts` |
 | 构建脚本 | `build.py` |
@@ -42,6 +44,8 @@ main.go
 - **新增 API**：在 `GoServer/handlers/` 写 handler，在 `GoServer/routes/routes.go` 注册。
 - **复杂业务**：优先抽到 `GoServer/services/`，保持 handler 简短。
 - **数据访问**：通过 `store/*` 包操作；`internal/repo` 负责底层 JSON 持久化。
+- **系统交互**：执行外部命令（隐藏控制台窗口）、打开浏览器、查询 Windows 版本，统一用 `GoServer/platform/`。
+- **进程退出**：托盘、Ctrl-C、前端 `POST /api/shutdown` 三条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），不要把它挪到子 goroutine。
 
 ### 前端分层
 
@@ -51,13 +55,17 @@ Web/src/
   components/   可复用组件
   stores/       Pinia 状态
   composables/  与 UI 解耦的逻辑
-  api/          axios 客户端 + 按领域拆分的 API 方法
+  api/          axios 客户端 + 按领域拆分的 API 方法（零散端点收在 misc.ts）
+  utils/        无状态工具（datetime / persist / playlistTable）
   styles/       CSS 变量、全局样式、导出样式
   constants/    Design Token（颜色、间距、字体、布局）
 ```
 
 - **新增页面**：`views/` 创建组件，`router/index.ts` 加路由。
 - **样式**：优先使用 `variables.css` 变量和 `constants/`；避免在业务逻辑中写死颜色/像素。
+- **日期时间**：统一从 `utils/datetime.ts` 取 `dayjs`（isoWeek 插件在那里注册一次），不要在各文件重复 `dayjs.extend`。
+- **localStorage**：统一走 `utils/persist.ts`，key 带 `bctools.` 前缀并保留旧 key 兼容读取。
+- **中文分词**：`segmentit` 词典约 1.25 MB（gzip），已改为动态 `import()`。需要分词前先 `await ensureSegmenter()`；未就绪时 `segmentChineseTitle` 原样返回标题。不要改回静态 import。
 - **导出图片**：样式定义在 `Web/src/styles/export.css`，业务逻辑在 `Web/src/composables/useExportImage.ts`。
 
 ## 关键配置

@@ -52,12 +52,10 @@ import { sortSongs } from "../api/songs"
 import { useMessage } from "naive-ui"
 import DormGrid from "../components/dorm/DormGrid.vue"
 import SongImportPanel from "../components/dorm/SongImportPanel.vue"
-import SettingsFab from "../components/common/SettingsFab.vue"
+import SettingsFab from "../components/ui/SettingsFab.vue"
 import { Left, Right, Time } from "@icon-park/vue-next"
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
+import { dayjs } from "../utils/datetime"
 
-dayjs.extend(isoWeek)
 
 const { t } = useI18n()
 const router = useRouter()

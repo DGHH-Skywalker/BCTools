@@ -4,15 +4,13 @@ import { useSettingsStore } from "../stores/settings"
 import { useExportStore } from "../stores/export"
 import { useAppConfig } from "./useAppConfig"
 import { useI18n } from "../i18n"
-import { buildDormTableHTML, parseTime, toCircledNumber, formatExportTitle } from "../utils/playlistTable"
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
+import { buildDormTableHTML, parseTime, toCircledNumber, formatExportTitle, ensureSegmenter } from "../utils/playlistTable"
+import { dayjs } from "../utils/datetime"
 import { domToPng } from "modern-screenshot"
 import DOMPurify from "dompurify"
 import type { Song, SongType, TimeSlot } from "../api/types"
 import exportStyles from "../styles/export.css?inline"
 
-dayjs.extend(isoWeek)
 
 const fontBase64Cache: Record<string, string | null> = {}
 const imageBase64Cache: Record<string, string | null> = {}
@@ -406,6 +404,9 @@ export function useExportImage() {
   }
 
   async function generateImage(dates: string[], type: SongType): Promise<string> {
+    // 导出是唯一真正需要中文分词的场景，在这里等词典就绪。
+    // 词典是动态 import 的独立块（约 1.25 MB gzip），不进首屏。
+    await ensureSegmenter()
     const isPoster = !exportStore.simpleMode
     let rawHtml = ""
     let bgColor = "#ffffff"

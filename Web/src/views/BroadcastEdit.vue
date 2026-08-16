@@ -30,12 +30,10 @@ import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
 import BroadcastGrid from "../components/broadcast/BroadcastGrid.vue"
 import BroadcastColumnMapModal from "../components/broadcast/BroadcastColumnMapModal.vue"
-import SettingsFab from "../components/common/SettingsFab.vue"
+import SettingsFab from "../components/ui/SettingsFab.vue"
 import { Left, Right, Calendar } from "@icon-park/vue-next"
-import dayjs from "dayjs"
-import isoWeek from "dayjs/plugin/isoWeek"
+import { dayjs } from "../utils/datetime"
 
-dayjs.extend(isoWeek)
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()

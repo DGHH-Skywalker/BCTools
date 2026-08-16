@@ -15,6 +15,7 @@ declare module 'vue' {
     CalendarGrid: typeof import('./components/calendar/CalendarGrid.vue')['default']
     DormGrid: typeof import('./components/dorm/DormGrid.vue')['default']
     DormPlaylistTable: typeof import('./components/dorm/DormPlaylistTable.vue')['default']
+    DormSongRow: typeof import('./components/dorm/DormSongRow.vue')['default']
     ExportActions: typeof import('./components/export/ExportActions.vue')['default']
     ExportAdvancedDrawer: typeof import('./components/export/ExportAdvancedDrawer.vue')['default']
     FeasibilityCheck: typeof import('./components/home/FeasibilityCheck.vue')['default']
@@ -72,9 +73,8 @@ declare module 'vue' {
     PageTitle: typeof import('./components/common/PageTitle.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    SettingsFab: typeof import('./components/common/SettingsFab.vue')['default']
+    SettingsFab: typeof import('./components/ui/SettingsFab.vue')['default']
     SongImportPanel: typeof import('./components/dorm/SongImportPanel.vue')['default']
-    WarningText: typeof import('./components/ui/WarningText.vue')['default']
     WeekTransferPanel: typeof import('./components/export/WeekTransferPanel.vue')['default']
     YearSelect: typeof import('./components/common/YearSelect.vue')['default']
   }

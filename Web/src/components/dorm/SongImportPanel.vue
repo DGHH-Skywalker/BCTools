@@ -36,7 +36,7 @@ import { useFileProcessor } from "../../composables/useFileProcessor"
 import { fetchStageMeta, fetchStageFile, markStageImported } from "../../api/decrypt"
 import ImportUploadZone from "../song-import/ImportUploadZone.vue"
 import ImportProcessingGrid from "../song-import/ImportProcessingGrid.vue"
-import dayjs from "dayjs"
+import { dayjs } from "../../utils/datetime"
 import type { SelectOption } from "naive-ui"
 
 const props = defineProps<{

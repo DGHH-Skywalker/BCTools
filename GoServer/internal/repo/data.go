@@ -1,7 +1,6 @@
 package repo
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -74,18 +73,19 @@ func DefaultTimeSlots() []models.TimeSlot {
 	return slots
 }
 
-// EnsureDefaultTimeSlots makes sure the default time slots exist.
+// EnsureDefaultTimeSlots seeds the default time slots only for legacy data files
+// that have no "timeSlots" field at all (nil).
+//
+// 重要：绝不能按「(天, 时间) 缺失就补回默认值」的方式工作。那样一来，用户在时段
+// 配置里删除或修改过的默认时段（如把 06:20 改成 06:10）会在每次启动时被重新加回，
+// 表现为「默认参数覆盖我的配置」。
+//
+//   - slots == nil     旧版数据文件没有该字段 → 补默认值
+//   - len(slots) == 0  用户显式清空 → 保持为空，不复活
+//   - 其他             完全尊重用户配置，只做排序
 func EnsureDefaultTimeSlots(slots []models.TimeSlot) []models.TimeSlot {
-	defaults := DefaultTimeSlots()
-	existing := make(map[string]bool, len(slots))
-	for _, s := range slots {
-		existing[fmt.Sprintf("%d:%s", s.DayIndex, s.Time)] = true
-	}
-	for _, d := range defaults {
-		key := fmt.Sprintf("%d:%s", d.DayIndex, d.Time)
-		if !existing[key] {
-			slots = append(slots, d)
-		}
+	if slots == nil {
+		slots = DefaultTimeSlots()
 	}
 	sort.Slice(slots, func(i, j int) bool {
 		if slots[i].DayIndex != slots[j].DayIndex {
@@ -97,6 +97,10 @@ func EnsureDefaultTimeSlots(slots []models.TimeSlot) []models.TimeSlot {
 }
 
 // CalcWeekday returns the Chinese weekday for a date string (YYYY-MM-DD).
+// weekdayNames 提为包级变量：CalcWeekday 会被每首歌调用一次，
+// 原先每次调用都新建一个 slice。
+var weekdayNames = [7]string{"周一", "周二", "周三", "周四", "周五", "周六", "周日"}
+
 func CalcWeekday(dateStr string) string {
 	t, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
@@ -106,6 +110,5 @@ func CalcWeekday(dateStr string) string {
 	if dayIndex == 0 {
 		dayIndex = 7
 	}
-	weekdays := []string{"周一", "周二", "周三", "周四", "周五", "周六", "周日"}
-	return weekdays[dayIndex-1]
+	return weekdayNames[dayIndex-1]
 }

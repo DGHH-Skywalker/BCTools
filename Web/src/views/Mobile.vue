@@ -28,7 +28,7 @@ import { ref, onMounted, onUnmounted, computed } from "vue"
 import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
 import { useTheme } from "../composables/useTheme"
-import { getNetworkInfo } from "../api/network"
+import { getNetworkInfo } from "../api/misc"
 import type { NetworkInfo } from "../api/types"
 
 const { t } = useI18n()

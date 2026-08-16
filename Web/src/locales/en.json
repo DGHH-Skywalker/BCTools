@@ -225,7 +225,10 @@
     "duplicateWarning": "Possible duplicate — “{title}” already exists on {date}. Please verify.",
     "unassigned": "Unassigned",
     "dragSort": "Drag to reorder",
-    "assignSlot": "Set slot"
+    "assignSlot": "Set slot",
+    "pendingCard": "Pending",
+    "pendingCardHint": "Drag onto a time slot on the left, or use the button next to a title",
+    "pendingCardEmpty": "No unassigned songs this week"
   },
   "guide": {
     "title": "User Guide",

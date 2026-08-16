@@ -35,7 +35,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import dayjs from "dayjs"
+import { dayjs } from "../../utils/datetime"
 import { zhCN, dateZhCN } from "naive-ui"
 
 const locale = {

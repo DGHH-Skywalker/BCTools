@@ -49,3 +49,6 @@ build*.log
 # 精简版 ffmpeg 构建产物（单独仓库/工具链，可选追踪）
 # GoServer/ffmpeg_bctools_mini/src/
 # GoServer/ffmpeg_bctools_mini/dist/
+
+# Claude Code 本地权限配置（机器相关，不入库）
+.claude/settings.local.json

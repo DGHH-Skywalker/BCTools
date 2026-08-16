@@ -44,7 +44,7 @@ import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
 import { Delete } from "@icon-park/vue-next"
 import AudioPlayButton from "../common/AudioPlayButton.vue"
-import dayjs from "dayjs"
+import { dayjs } from "../../utils/datetime"
 import type { Song } from "../../api/types"
 
 const props = defineProps<{

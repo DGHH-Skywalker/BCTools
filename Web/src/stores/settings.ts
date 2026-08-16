@@ -1,7 +1,7 @@
 import { defineStore } from "pinia"
 import { ref } from "vue"
 import type { Settings, TimeSlot } from "../api/types"
-import * as settingsApi from "../api/settings"
+import * as settingsApi from "../api/misc"
 
 export const useSettingsStore = defineStore("settings", () => {
   const timeSlots = ref<TimeSlot[]>([])
