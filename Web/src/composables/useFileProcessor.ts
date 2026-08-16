@@ -2,6 +2,7 @@ import { reactive, computed } from "vue"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
 import { processFile, stashFile } from "../api/files"
+import { importStage } from "../api/decrypt"
 import { createSong, updateSong } from "../api/songs"
 import { findSimilarSongs } from "../utils/songSimilarity"
 import type { FileProcessResult, Song } from "../api/types"
@@ -18,6 +19,8 @@ export interface ProcessingFile {
   timeSlotId: string | null
   error: string
   duplicateWarnings?: Song[]
+  // 非空表示音频已在后端暂存区，走「就地入库」而非上传 file。
+  stageId?: string
 }
 
 export function useFileProcessor(selectedDateRef: { value: string }, defaultTimeSlotIdRef?: { value: string | null | undefined }) {
@@ -71,6 +74,36 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
     if (status === "done") return "success"
     if (status === "error") return "error"
     return "warning"
+  }
+
+  // handleStagedFile 把一个「已在后端暂存区」的音频排入同一条处理队列。
+  //
+  // 与 handleFiles 的区别：不持有 File 内容，处理时走 /decrypt/stage/:id/import
+  // 让后端就地入库，省掉「下载回浏览器再上传」的两趟传输。
+  function handleStagedFile(stageId: string, filename: string): Promise<ProcessingFile[]> {
+    const ext = filename.split(".").pop()?.toLowerCase() || ""
+    const item: ProcessingFile = {
+      id: `s-${stageId}`,
+      fileName: filename,
+      fileType: ext,
+      // 队列里的其他逻辑（去重键、重试）只读 name/size/lastModified，
+      // 用一个空 File 占位即可，真正的字节留在后端。
+      file: new File([], filename),
+      status: "pending",
+      songTitle: filename.replace(/\.[^.]+$/, ""),
+      tempFileName: null,
+      songId: null,
+      timeSlotId: null,
+      error: "",
+      stageId,
+    }
+    // 同一个 stageId 不重复入队（弹窗重开、路由 query 残留都可能触发两次）。
+    if (processingFiles.some((f) => f.stageId === stageId && f.status !== "error")) {
+      return waitForSettled(processingFiles.filter((f) => f.stageId === stageId))
+    }
+    processingFiles.push(item)
+    pumpQueue()
+    return waitForSettled([item])
   }
 
   function handleFiles({ fileList }: any): Promise<ProcessingFile[]> {
@@ -146,7 +179,11 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
     const ext = item.fileType
     try {
       let result: FileProcessResult
-      if (ext === "mp3") {
+      if (item.stageId) {
+        // 音频已在后端暂存区（um-react 桥接），让后端就地转入歌库，
+        // 不再下载回浏览器再上传一遍。
+        result = await importStage(item.stageId)
+      } else if (ext === "mp3") {
         result = await stashFile(item.file)
       } else {
         result = await processFile(item.file)
@@ -246,6 +283,7 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
     doneCount,
     statusTagType,
     handleFiles,
+    handleStagedFile,
     retryFile,
     updateTitle,
     saveMetadata,

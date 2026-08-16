@@ -328,3 +328,61 @@ interface Song {
   "downloadUrl": ""
 }
 ```
+
+## 解密暂存（um-react 桥接）
+
+um-react 在前端完成解密后，把音频交给主应用导入。两个页面可能在**不同设备**上
+（手机解密、电脑导入），因此交接走后端暂存区而非 postMessage。
+
+### 上传暂存
+
+`POST /api/decrypt/stage`（multipart，字段名 `file`）
+
+响应：
+```json
+{ "stageId": "uuid", "filename": "李克勤 - 红日.mp3", "size": 12451935 }
+```
+
+### 查询暂存元信息
+
+`GET /api/decrypt/stage/{id}`
+
+```json
+{ "filename": "李克勤 - 红日.mp3", "size": 12451935, "ext": ".mp3", "imported": false }
+```
+
+### 就地导入歌库（推荐）
+
+`POST /api/decrypt/stage/{id}/import`
+
+服务端直接把暂存文件转入歌库，响应结构与 `/api/files/stash` 一致：
+
+```json
+{ "tempFileName": "uuid.mp3", "title": "李克勤 - 红日", "artist": "" }
+```
+
+**为什么要有这个端点**：此前主应用得先 `GET .../file` 把音频下载回浏览器，
+再 `POST /api/files/stash` 原样传回去。一首 11.88 MB 的歌要在本机 HTTP 上跑三趟
+共 35.6 MB。实测（真实 `.ncm`，Python 直连、排除 curl 进程启动开销）：
+
+| | 耗时 | 传输量 |
+|---|---|---|
+| 旧：下载回来再上传 | ~263 ms | 35.6 MB |
+| 新：就地导入 | **~67 ms** | **11.9 MB** |
+
+已是 MP3 时用 rename 搬运，并优先采用暂存 meta 里的文件名作标题，
+从而跳过 ffprobe（一次约 88 ms，比复制 12 MB 还贵 5 倍）。
+非 MP3（flac/m4a 等）仍走 `StashFile` 转码。
+
+### 下载暂存文件
+
+`GET /api/decrypt/stage/{id}/file`
+
+仍保留，供需要拿到原始字节的场景使用；导入流程已不再需要它。
+
+### 标记已导入 / 删除暂存
+
+`POST /api/decrypt/stage/{id}/imported`：置 `imported=true`。um-react 轮询到该标志后
+用自身的删除逻辑移除卡片，再调用下面的删除接口。
+
+`DELETE /api/decrypt/stage/{id}`：清理暂存文件。

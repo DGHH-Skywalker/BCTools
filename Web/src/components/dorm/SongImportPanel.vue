@@ -33,7 +33,7 @@ import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
 import { useSettingsStore } from "../../stores/settings"
 import { useFileProcessor } from "../../composables/useFileProcessor"
-import { fetchStageMeta, fetchStageFile, markStageImported } from "../../api/decrypt"
+import { fetchStageMeta, markStageImported } from "../../api/decrypt"
 import ImportUploadZone from "../song-import/ImportUploadZone.vue"
 import ImportProcessingGrid from "../song-import/ImportProcessingGrid.vue"
 import { dayjs } from "../../utils/datetime"
@@ -62,6 +62,7 @@ const {
   doneCount,
   statusTagType,
   handleFiles,
+  handleStagedFile,
   retryFile,
   updateTitle,
   saveMetadata,
@@ -108,14 +109,14 @@ onMounted(async () => {
   }
 })
 
-// 从后端暂存区拉取 um-react 解密后的音频并走正常导入流程；
-// 成功后置 imported 标志，um-react 侧轮询到即删除对应卡片
+// 从后端暂存区导入 um-react 解密后的音频。
+// 音频已经在后端，因此只传 stageId 让后端就地入库——不再下载回浏览器再上传，
+// 省掉一首歌两趟共约 24 MB 的本机传输。
+// 成功后置 imported 标志，um-react 侧轮询到即删除对应卡片。
 async function importFromStage(stageId: string) {
   try {
     const meta = await fetchStageMeta(stageId)
-    const blob = await fetchStageFile(stageId)
-    const file = new File([blob], meta.filename)
-    const results = await handleFiles({ fileList: [file] })
+    const results = await handleStagedFile(stageId, meta.filename)
     if (results.some((r) => r.status === "done")) {
       await markStageImported(stageId)
       emit("song-added")

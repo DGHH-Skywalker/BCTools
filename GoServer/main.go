@@ -238,7 +238,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown f
 		Update:    handlers.NewUpdateHandler(settingsStore),
 		Network:   handlers.NewNetworkHandler(port),
 		System:    handlers.NewSystemHandler(appDataDir, version.Version),
-		Decrypt:   handlers.NewDecryptHandler(appDataDir),
+		Decrypt:   handlers.NewDecryptHandler(appDataDir, conv),
 		Lifecycle: lifecycle,
 	})
 

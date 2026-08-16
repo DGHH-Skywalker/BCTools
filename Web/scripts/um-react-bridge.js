@@ -28,8 +28,10 @@
   var IMPORT_URL = "/#/dorm/manage?stage=";
   var LOGO_URL = "/logo.png";
   var IMPORT_TAB_NAME = "bctools_import";
-  var POLL_INTERVAL = 1500; // ms
-  var POLL_MAX_ATTEMPTS = 200; // ~5 min before giving up
+  // 轮询间隔直接决定「主应用导入成功 → um-react 这边卡片消失」的观感延迟。
+  // 1500ms 会让用户觉得卡了一下；请求本身只是读一个几十字节的 meta，很轻。
+  var POLL_INTERVAL = 300; // ms
+  var POLL_MAX_ATTEMPTS = 1000; // ~5 min before giving up
 
   // stageId -> { btn, fileName, timer, attempts }
   var pending = {};

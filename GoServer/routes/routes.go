@@ -67,6 +67,7 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 			r.Post("/stage", hs.Decrypt.HandleStage)
 			r.Get("/stage/{id}", hs.Decrypt.HandleStageMeta)
 			r.Get("/stage/{id}/file", hs.Decrypt.HandleStageFile)
+			r.Post("/stage/{id}/import", hs.Decrypt.HandleStageImport)
 			r.Post("/stage/{id}/imported", hs.Decrypt.HandleStageImported)
 			r.Delete("/stage/{id}", hs.Decrypt.HandleStageDelete)
 		})

@@ -38,6 +38,24 @@ export async function fetchStageFile(stageId: string): Promise<Blob> {
   return res.data
 }
 
+export interface StageImportResult {
+  tempFileName: string
+  title: string
+  artist: string
+}
+
+// importStage 让后端把暂存文件就地转入歌库，返回和 /files/stash 相同的结构。
+//
+// 取代「下载回浏览器再原样上传」：那样一首 12 MB 的歌要在本机 HTTP 上跑三趟
+// 共 35.6 MB，实测多花约 410 ms。音频本来就在后端，没必要绕一圈。
+export async function importStage(stageId: string): Promise<StageImportResult> {
+  const res = await apiClient.post(`/decrypt/stage/${stageId}/import`, null, {
+    // 大文件转码（非 MP3 时）可能超过默认 30s
+    timeout: 0,
+  })
+  return res.data
+}
+
 export async function deleteStage(stageId: string): Promise<void> {
   await apiClient.delete(`/decrypt/stage/${stageId}`)
 }
