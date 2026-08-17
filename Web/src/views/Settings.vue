@@ -11,10 +11,16 @@
               </n-h1>
               <n-text>{{ t("about.softwareIntro") }}</n-text>
               <n-text depth="3">{{ t("settings.version") }}: {{ settingsStore.version }}</n-text>
-              <n-button size="small" @click="goToGuide">
-                <template #icon><Help theme="outline" :size="14" :strokeWidth="3" /></template>
-                {{ t("about.guideButton") }}
-              </n-button>
+              <n-space size="small" wrap>
+                <n-button size="small" @click="goToGuide">
+                  <template #icon><Help theme="outline" :size="14" :strokeWidth="3" /></template>
+                  {{ t("about.guideButton") }}
+                </n-button>
+                <n-button size="small" @click="goToMigration">
+                  <template #icon><Upload theme="outline" :size="14" :strokeWidth="3" /></template>
+                  {{ t("settings.dataMigration") }}
+                </n-button>
+              </n-space>
             </n-space>
           </n-space>
         </n-card>
@@ -43,7 +49,7 @@ import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
 import { useTheme } from "../composables/useTheme"
-import { Help } from "@icon-park/vue-next"
+import { Help, Upload } from "@icon-park/vue-next"
 import PageContainer from "../components/ui/PageContainer.vue"
 
 const { t } = useI18n()
@@ -53,6 +59,10 @@ const { isDark } = useTheme()
 
 function goToGuide() {
   router.push("/settings/guide")
+}
+
+function goToMigration() {
+  router.push("/settings/migration")
 }
 
 const logoSrc = computed(() => (isDark.value ? "/logo-white.png" : "/logo.png"))

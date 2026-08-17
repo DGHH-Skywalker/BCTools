@@ -40,6 +40,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: "", component: () => import("../views/Settings.vue"), meta: { title: "软件设置" } },
       { path: "guide", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } },
+      { path: "migration", component: () => import("../views/DataMigration.vue"), meta: { title: "数据迁移" } },
     ],
   },
   { path: "/about-software", redirect: "/settings" },

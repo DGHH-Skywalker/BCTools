@@ -2,7 +2,7 @@
 
 面向校园广播站的本地点歌与歌单管理工具。单文件 `.exe`，双击即用，数据全部留在本机。
 
-![版本](https://img.shields.io/badge/version-5.5.0.0-0086C3)
+![版本](https://img.shields.io/badge/version-5.6.0.0-0086C3)
 ![平台](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
 ![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white)
@@ -31,8 +31,8 @@ BCTools 把这套流程做成了：
 | `BCTools-Setup.exe` | 安装程序（推荐） |
 | `bctools.exe` | 免安装单文件版 |
 
-运行后自动打开浏览器访问 `http://localhost:1743/`，托盘会出现图标：
-**左键**打开界面，**右键**菜单可打开界面或退出后端。
+运行后自动打开浏览器访问 `http://localhost:1743/`，托盘会出现图标。
+**右键**菜单可退出后端。
 
 > 内置精简版 ffmpeg/ffprobe，无需另装。首次运行会释放到
 > `%APPDATA%\BroadcastTool\bin`。
@@ -60,13 +60,20 @@ BCTools 把这套流程做成了：
 
 ## 从源码构建
 
-需要：Go 1.25+、Node.js 18+、Python 3.10+，Windows。
-构建安装程序还需 MinGW-w64（`g++` 在 PATH 中）。
+需要：Go 1.22+、Node.js 18+、corepack（自带的，无需另装）、Windows。
+构建安装程序还需 MinGW-w64（`g++` 在 PATH 中）。**Python 3.10+ 仅在
+坚持用 `build.py` 旧入口时需要**——新入口是 npm。
 
 ```bash
-git clone --recursive <repo-url> BCTools
+git clone <repo-url> BCTools      # 5.6.0 起 um-react 已直接放进仓库，无需 --recursive
 cd BCTools
-python build.py
+npm install                       # 根 devDependencies（concurrently）
+npm --prefix Web install --legacy-peer-deps
+corepack pnpm --dir Web/um-react install --no-frozen-lockfile
+npm run build                     # 一条龙：前端 + um-react + ffmpeg 嵌入 + Go 编译
+```
+
+> 完整步骤、产物清单、版本号改哪几处等见 [DEVELOPER.md](./DEVELOPER.md)。
 ```
 
 产物输出到 `dist/`：

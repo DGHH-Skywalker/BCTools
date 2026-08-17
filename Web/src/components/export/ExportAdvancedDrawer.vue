@@ -110,7 +110,7 @@ import { useAppConfig } from "../../composables/useAppConfig"
 import { useMessage } from "naive-ui"
 import type { UploadFileInfo } from "naive-ui"
 import type { SongType } from "../../api/types"
-import { COLORS } from "../../constants"
+import { COLORS } from "../../constants/colors"
 import { Close } from "@icon-park/vue-next"
 
 const props = defineProps<{

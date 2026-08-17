@@ -28,6 +28,7 @@ import (
 	"broadcast-tool/platform"
 	"broadcast-tool/routes"
 	"broadcast-tool/server"
+	"broadcast-tool/services"
 	"broadcast-tool/store/deletedlogstore"
 	"broadcast-tool/store/settingstore"
 	"broadcast-tool/store/snapshotstore"
@@ -122,7 +123,7 @@ func main() {
 	// 消息循环只能跑在启动它的那个 OS 线程上。
 	// tray.Run 阻塞至用户选择「退出程序」或收到系统信号。
 	tray.Run(tray.Config{
-		Tooltip: fmt.Sprintf("小播点歌工具 v%s — 左键打开界面", version.Version),
+		Tooltip: fmt.Sprintf("小播点歌工具 v%s — 右键菜单打开 / 退出", version.Version),
 		OnOpen: func() {
 			url := fmt.Sprintf("http://localhost:%d/", port)
 			if err := platform.OpenBrowser(url); err != nil {
@@ -230,15 +231,18 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown f
 	})
 
 	routes.RegisterRoutes(r, routes.HandlerSet{
-		Songs:     handlers.NewSongHandler(songStore, snapshotStore),
-		Files:     handlers.NewFileHandler(appDataDir, conv),
-		Auth:      handlers.NewAuthHandler(settingsStore),
-		Settings:  handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
-		Snapshot:  handlers.NewSnapshotHandler(snapshotStore),
-		Update:    handlers.NewUpdateHandler(settingsStore),
-		Network:   handlers.NewNetworkHandler(port),
-		System:    handlers.NewSystemHandler(appDataDir, version.Version),
-		Decrypt:   handlers.NewDecryptHandler(appDataDir, conv),
+		Songs:    handlers.NewSongHandler(songStore, snapshotStore),
+		Files:    handlers.NewFileHandler(appDataDir, conv),
+		Auth:     handlers.NewAuthHandler(settingsStore),
+		Settings: handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
+		Snapshot: handlers.NewSnapshotHandler(snapshotStore),
+		Update:   handlers.NewUpdateHandler(settingsStore),
+		Network:  handlers.NewNetworkHandler(port),
+		System:   handlers.NewSystemHandler(appDataDir, version.Version),
+		Decrypt:  handlers.NewDecryptHandler(appDataDir, conv),
+		Migration: handlers.NewMigrationHandler(
+			services.NewMigrationService(appDataDir, repo, songStore, settingsStore, deletedLogStore),
+		),
 		Lifecycle: lifecycle,
 	})
 

@@ -9,7 +9,316 @@ import { dayjs } from "../utils/datetime"
 import { domToPng } from "modern-screenshot"
 import DOMPurify from "dompurify"
 import type { Song, SongType, TimeSlot } from "../api/types"
-import exportStyles from "../styles/export.css?inline"
+
+// 导出图片 DOM 的样式：之前抽到 Web/src/styles/export.css 里；该文件只为
+// domToPng 注入样式使用，没有别的消费者——直接 inline 在这里，把「调用方
+// 唯一」的 CSS 与逻辑合在一处。颜色 / 字体变量走 :root 上的 CSS Variables。
+const exportStyles = `
+/* Simple table export (dorm / broadcast) */
+.ex-simple-title {
+  text-align: center;
+  margin-bottom: 24px;
+  font-weight: 400;
+}
+
+.ex-simple-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-body);
+}
+
+.ex-simple-table th,
+.ex-simple-table td {
+  padding: 8px;
+  border: 1px solid var(--color-border-dark);
+  text-align: center;
+  font-weight: 400;
+}
+
+.ex-simple-table th {
+  background: var(--color-bg-light);
+}
+
+.ex-simple-table td {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-break: strict;
+}
+
+.ex-simple-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+
+.ex-simple-date-month {
+  font-family: var(--font-body);
+  font-size: 18px;
+}
+
+.ex-simple-date-weekday {
+  font-family: var(--font-slot);
+  font-size: 24px;
+}
+
+/* Poster export */
+.ex-poster {
+  position: relative;
+  width: 1080px;
+  height: auto;
+  padding: 120px 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: transparent;
+}
+
+.ex-poster-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.08);
+}
+
+.ex-poster-bg-gradient {
+  position: absolute;
+  inset: 0;
+}
+
+.ex-poster-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.ex-poster-badge {
+  position: absolute;
+  top: 90px;
+  right: 80px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  z-index: 3;
+}
+
+.ex-poster-badge-text {
+  font-family: var(--font-title);
+  font-size: 34px;
+  font-weight: 400;
+  color: var(--theme-color);
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 0.12em;
+}
+
+.ex-poster-title-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 0 80px;
+  box-sizing: border-box;
+  z-index: 10;
+}
+
+.ex-poster-logo {
+  height: 120px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 0.08em 0.15em rgba(0, 0, 0, 0.35));
+}
+
+.ex-poster-logo-placeholder {
+  width: 54px;
+  height: 105px;
+  flex-shrink: 0;
+}
+
+.ex-poster-title {
+  font-family: var(--font-title);
+  font-size: 90px;
+  font-weight: 400;
+  color: var(--color-poster-text);
+  text-shadow: 0 0.08em 0.15em rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+
+.ex-poster-card {
+  position: relative;
+  z-index: 1;
+  width: 960px;
+  background: rgba(0, 0, 0, 0.32);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 12px 38px 0 rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ex-poster-card-header,
+.ex-poster-card-footer {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.ex-poster-card-header {
+  padding-top: 36px;
+}
+
+.ex-poster-card-footer {
+  padding-bottom: 36px;
+}
+
+.ex-poster-quote {
+  font-family: var(--font-fangsong);
+  font-size: 36px;
+  color: var(--color-poster-muted);
+  text-align: center;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}
+
+.ex-poster-divider {
+  width: 90%;
+  height: 1px;
+  background: #ffffff;
+  opacity: 0.6;
+  margin: 24px 0 0;
+}
+
+.ex-poster-divider-bottom {
+  margin: 0 0 24px;
+}
+
+.ex-poster-table-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+  box-sizing: border-box;
+}
+
+.ex-poster-empty {
+  width: 94%;
+  padding: 48px 0;
+  text-align: center;
+  color: var(--color-poster-muted);
+  font-size: 36px;
+  font-family: var(--font-body);
+}
+
+.ex-poster-grid {
+  width: 94%;
+  display: grid;
+  gap: 0;
+  align-items: stretch;
+  justify-items: stretch;
+  font-family: var(--font-body);
+  border: 1px solid #ffffff;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.ex-poster-grid.broadcast {
+  border-color: #ffffff;
+}
+
+.ex-poster-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--color-poster-text);
+  opacity: 1;
+  background: transparent;
+  padding: 0 12px;
+  line-height: 1.25;
+  box-sizing: border-box;
+  min-height: 100%;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-break: strict;
+}
+
+.ex-poster-cell.narrow {
+  padding: 0 8px;
+  font-family: var(--font-body);
+  font-size: 24px;
+  font-weight: 100;
+  opacity: 0.85;
+}
+
+.ex-poster-cell.header {
+  font-size: 40px;
+}
+
+.ex-poster-cell.title {
+  font-family: var(--font-song);
+}
+
+.ex-poster-cell.slot,
+.ex-poster-cell.header {
+  font-family: var(--font-slot);
+}
+
+.ex-poster-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  width: 100%;
+}
+
+.ex-poster-cell-stack.loose {
+  gap: 8px;
+}
+
+.ex-poster-afternoon-label {
+  font-family: var(--font-title);
+  font-size: 42px;
+  color: var(--color-poster-text);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+.song-with-number {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1.3;
+}
+
+.circled-number {
+  font-size: 0.85em;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.song-title {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  line-break: strict;
+}
+`
 
 
 const fontBase64Cache: Record<string, string | null> = {}

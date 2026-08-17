@@ -36,10 +36,9 @@ func onReady(cfg Config) {
 	}
 	systray.SetTooltip(cfg.Tooltip)
 
-	// 左键单击直接打开界面。不设 SetOnSecondaryTapped——systray 在右键
-	// 未注册回调时会自行弹出下面这份菜单，正是我们想要的行为。
-	systray.SetOnTapped(func() { invoke("open", cfg.OnOpen) })
-
+	// 不注册 SetOnTapped——左键只显示图标，没有回调。
+	// 配合 tray/dpi_windows.go 的 Per-Monitor V2，右键菜单在 2K/4K 屏上
+	// 自动跟随系统缩放，不再糊。
 	mOpen := systray.AddMenuItem("打开界面", "在浏览器中打开小播点歌工具")
 	systray.AddSeparator()
 	mExit := systray.AddMenuItem("退出程序", "关闭后端服务并退出")

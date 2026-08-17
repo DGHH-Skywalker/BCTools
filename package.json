@@ -1,0 +1,30 @@
+{
+  "name": "bctools",
+  "version": "5.6.0.0",
+  "private": true,
+  "description": "小播点歌工具 — 整库（Vue 3 前端 + um-react + Go 后端）开发 / 构建 / 打包入口，替代 build.py。",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/ensure-root-deps.cjs",
+    "dev": "concurrently -n web,api -c blue,green --kill-others-on-fail \"npm:dev:web\" \"npm:dev:server\"",
+    "dev:web": "npm --prefix Web run dev",
+    "dev:server": "go -C GoServer run . -- --dev",
+    "prebuild": "node scripts/ensure-root-deps.cjs",
+    "build": "npm run build:web && npm run build:copy && npm run build:um-react && npm run build:inject-ffmpeg && npm run build:server && npm run build:installer",
+    "build:web": "node scripts/build-web.cjs",
+    "build:um-react": "node scripts/build-um-react.cjs",
+    "build:copy": "node scripts/copy-embed.cjs",
+    "build:inject-ffmpeg": "node scripts/inject-ffmpeg.cjs",
+    "build:server": "go -C GoServer build -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
+    "build:installer": "node scripts/build-installer.cjs",
+    "build:server-only": "go -C GoServer build -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
+    "build:clean": "node scripts/clean-all.cjs",
+    "test": "npm --prefix Web run test && go -C GoServer test ./...",
+    "type-check": "npm --prefix Web run type-check && go -C GoServer vet ./...",
+    "lint": "npm --prefix Web run lint",
+    "prune:i18n": "node scripts/prune-i18n.cjs"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

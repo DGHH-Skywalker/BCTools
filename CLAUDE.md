@@ -12,7 +12,8 @@
 | 进程生命周期 | `GoServer/handlers/lifecycle.go`（health / watch / shutdown） |
 | 前端入口 | `Web/src/main.ts` |
 | 前端路由 | `Web/src/router/index.ts` |
-| 构建脚本 | `build.py` |
+| 整库一键 dev / build | 根 `package.json`（`npm run dev` / `npm run build`，5.6.0 主入口） |
+| 完整发布构建（含安装程序） | `npm run build:full` 或 `python build.py` |
 | 版本唯一源 | `GoServer/internal/version/version.go` |
 | 数据持久化 | `GoServer/internal/repo/repo.go` |
 | 安装程序源码 | `installer/`（C++ Win32/GDI+） |
@@ -21,12 +22,16 @@
 
 ```
 BCTools/
-├── GoServer/    Go 后端（handlers / services / store / internal）
-├── Web/         Vue 3 前端（views / components / composables / stores）
-├── installer/   C++ Win32/GDI+ 原生安装/卸载程序
-├── dist/        构建产物输出目录
-├── docs/        设计/交接文档
-└── build.py     一键构建脚本
+├── GoServer/           Go 后端（handlers / services / store / internal）
+├── Web/                Vue 3 前端（views / components / composables / stores）
+│   └── um-react/       Unlock Music 源码（5.6.0 起直接放进仓库，原是 git submodule）
+├── installer/          C++ Win32/GDI+ 原生安装/卸载程序
+├── scripts/            跨子项目的 Node 工具脚本（build-web / build-um-react / inject-ffmpeg / clean-all）
+├── dist/               构建产物输出目录（不进入 git；用 `npm run build` 重新生成）
+├── package.json        整库 dev / build 入口
+├── DEVELOPER.md        开发者上手文档（环境、构建、约束、常见问题）
+├── CLAUDE.md           本文件：给 Agent 的工作约束
+└── build.py            旧版 Python 构建脚本（5.6.0 之前的主入口，npm 链是新推荐）
 ```
 
 ## 架构约定
@@ -48,7 +53,8 @@ main.go
 - **音频转码**：`converter/process.go` 的 `toMP3()` 会先嗅探格式（`converter/sniff.go`），解密结果已是 MP3 时直接搬运，不调 ffmpeg。重编码一首 4 分钟的歌约 4.8s，搬运 ~1ms，且能避免二次有损转码。不要改回无条件 `ConvertToMP3`。
 - **um-react 导入**：走 `POST /api/decrypt/stage/:id/import` 就地入库，**不要**改回「下载回浏览器再上传」——那样一首 12MB 的歌要在本机跑三趟共 35.6MB（~263ms vs ~67ms）。已是 MP3 时用 rename，并优先用暂存 meta 的文件名当标题以跳过 ffprobe（一次约 88ms）。
 - **换卡导出**：编号锚定「时段位置」不是歌曲（见 `Web/src/utils/exportEntries.ts`），空时段生成静音占位，否则整天空着会让后面曲序整体前移。同一时段多首歌合并成一个 MP3（`converter/merge.go`）——内置精简版 ffmpeg **没有** concat demuxer/滤镜/PCM muxer，所以用字节拼接 + 剥除后续文件的 ID3 标签，不要改成 ffmpeg concat。
-- **进程退出**：托盘、Ctrl-C、前端 `POST /api/shutdown` 三条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），不要把它挪到子 goroutine。
+- **托盘**：5.6.0 起**只保留右键菜单**（左键单击不再打开浏览器），由 `tray/dpi_windows.go` 在 init() 声明 Per-Monitor V2 DPI awareness 让菜单不糊在高分屏。`Config.OnOpen` 字段已删除。
+- **进程退出**：Ctrl-C、前端 `POST /api/shutdown` 两条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数（5.6.0 起托盘右键直接调 OnExit）。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），不要把它挪到子 goroutine。
 
 ### 前端分层
 
@@ -105,15 +111,50 @@ Web/src/
   - 导入：`Web/src/views/SongImport.vue`、`Web/src/composables/useFileProcessor.ts`
   - 导出：`Web/src/views/Export.vue`、`Web/src/composables/useExportImage.ts`
 
+## 整库 dev / build
+
+仓库根 `package.json` 提供一条龙入口，覆盖前端 + Go 后端。
+
+```bash
+# 一次性安装根级 devDependencies（concurrently、rimraf）
+npm install
+
+# 开发：vite 热更新 + go run 后端（--dev 会顶替已运行的后端）并行
+npm run dev
+
+# 构建：vite build → 嵌入到 GoServer/embed/dist → go build 产出 dist/bctools.exe
+npm run build
+
+# 单独运行子步骤
+npm run dev:web              # 仅 vite
+npm run dev:server           # 仅 go run
+npm run build:web            # 仅 vite build + 字体精简
+npm run build:copy           # 复制 Web/dist → GoServer/embed/dist
+npm run build:server         # 仅 go build
+npm run build:dev-server     # 产出 dist/bctool_dev.exe（带托盘、--dev 默认开）
+npm run build:clean          # 清理所有构建产物
+```
+
+发布完整安装包（前端 + um-react + 后端 + 安装程序 + ffmpeg 注入）请用 Python 构建：
+
+```bash
+python build.py
+```
+
+> 区别：`npm run build` 产物只有 `dist/bctools.exe`；`python build.py` 还会构建 um-react、产出 `BCTools-Setup.exe` 安装程序（需 MinGW-w64），并把精简版 ffmpeg/ffprobe 注入二进制。
+
 ## 测试
 
 ```bash
-# 前端
+# 整库
+npm run type-check           # 前端 vue-tsc + 后端 go vet
+npm run test                 # 前端 vitest + 后端 go test
+
+# 单独
 cd Web
 npm run type-check
 npm run test
 
-# 后端
 cd GoServer
 go test ./...
 ```

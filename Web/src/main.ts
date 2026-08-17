@@ -3,8 +3,6 @@ import { createPinia } from "pinia"
 import router from "./router"
 import App from "./App.vue"
 import { useErrorStore } from "./stores/error"
-import "./styles/variables.css"
-import "./styles/global.css"
 
 const app = createApp(App)
 app.use(createPinia())

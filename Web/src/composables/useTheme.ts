@@ -1,6 +1,6 @@
 import { ref, computed } from "vue"
 import { darkTheme } from "naive-ui"
-import { COLORS } from "../constants"
+import { COLORS } from "../constants/colors"
 
 export interface ThemeOverrides {
   common: {
