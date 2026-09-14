@@ -17,6 +17,7 @@ concurrency:
 env:
   NODE_VERSION: "24.7.0"
   PNPM_VERSION: "10.15.1"
+  GOPROXY: "https://goproxy.cn,direct"
 
 jobs:
   test:
