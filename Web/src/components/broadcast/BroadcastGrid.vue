@@ -13,13 +13,19 @@
           </n-space>
 
           <n-space v-for="song in songsFor(date, period.key)" :key="song.id" align="center" style="width:100%;">
-            <n-input
-              :value="song.title"
-              size="small"
-              style="flex:1;"
-              @update:value="(v: string) => updateTitle(song.id, v)"
-              @blur="saveTitle(song.id, song.title)"
-            />
+            <div style="flex:1;min-width:0;">
+              <n-input
+                :value="song.title"
+                size="small"
+                @update:value="(v: string) => updateTitle(song.id, v)"
+                @blur="saveTitle(song.id, song.title)"
+              />
+              <div v-if="duplicateWarnings(song).length" class="duplicate-warning">
+                <div v-for="warning in duplicateWarnings(song)" :key="warning.id">
+                  {{ t("dorm.duplicateWarning", { date: warning.date, title: warning.title }) }}
+                </div>
+              </div>
+            </div>
             <AudioPlayButton
               v-if="song.filePath"
               size="tiny"
@@ -42,6 +48,7 @@
 import { ref, computed, onMounted, watch } from "vue"
 import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
+import { useSongDuplicateWarnings } from "../../composables/useSongDuplicateWarnings"
 import { Delete } from "@icon-park/vue-next"
 import AudioPlayButton from "../common/AudioPlayButton.vue"
 import { dayjs } from "../../utils/datetime"
@@ -54,6 +61,7 @@ const props = defineProps<{
 
 const { t, weekdayName } = useI18n()
 const songsStore = useSongsStore()
+const { findWarnings: duplicateWarnings } = useSongDuplicateWarnings("broadcast")
 
 const editingSongs = ref<Song[]>([])
 
@@ -159,5 +167,11 @@ onMounted(() => {
 
 .broadcast-day-card {
   min-width: 0;
+}
+
+.duplicate-warning {
+  color: var(--color-warning);
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

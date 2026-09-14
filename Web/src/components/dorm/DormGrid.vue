@@ -94,7 +94,7 @@ import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
 import { useSettingsStore } from "../../stores/settings"
 import DormSongRow from "./DormSongRow.vue"
-import { findSimilarSongs } from "../../utils/songSimilarity"
+import { useSongDuplicateWarnings } from "../../composables/useSongDuplicateWarnings"
 import draggable from "vuedraggable"
 import { dayjs } from "../../utils/datetime"
 import type { Song, TimeSlot } from "../../api/types"
@@ -110,6 +110,7 @@ const emit = defineEmits<{
 const { t, weekdayName } = useI18n()
 const songsStore = useSongsStore()
 const settingsStore = useSettingsStore()
+const { findWarnings: duplicateWarnings } = useSongDuplicateWarnings("dorm")
 
 const editingSongs = ref<Song[]>([])
 const slotLists = reactive<Record<string, Song[]>>({})
@@ -211,11 +212,6 @@ watch(
   rebuildSlotLists,
   { deep: true, immediate: true },
 )
-
-function duplicateWarnings(song: Song) {
-  if (!song.title) return []
-  return findSimilarSongs(song.title, song.date, songsStore.dormSongs, settingsStore.duplicateCheckDays || 30)
-}
 
 function parseTime(time: string): number {
   const [h, m] = time.split(":").map(Number)

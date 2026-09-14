@@ -65,7 +65,8 @@ export function findSimilarSongs(
   title: string,
   date: string,
   allSongs: Song[],
-  days: number
+  days: number,
+  options: { includeSameDate?: boolean; excludeSongId?: number } = {},
 ): Song[] {
   if (!title || !date || days <= 0) return []
   const end = new Date(date)
@@ -74,9 +75,11 @@ export function findSimilarSongs(
   const matches: Song[] = []
   for (const song of allSongs) {
     if (!song.title) continue
-    if (song.date === date) continue
+    if (options.excludeSongId != null && song.id === options.excludeSongId) continue
+    if (!options.includeSameDate && song.date === date) continue
     const d = new Date(song.date)
-    if (d >= start && d < end && isSimilar(title, song.title)) {
+    const withinWindow = options.includeSameDate ? d >= start && d <= end : d >= start && d < end
+    if (withinWindow && isSimilar(title, song.title)) {
       matches.push(song)
     }
   }

@@ -631,25 +631,26 @@ export function useExportImage() {
   }
 
   function buildBroadcastPosterTableV2(dates: string[]): string {
-    const rowLabels = ["中午", "下午"]
-    const colCount = dates.length + 1
+    // 广播歌单若按「每天一列」展示，一周有 7 天时每一列只剩约 110px，
+    // 中文歌名会被逐字折行，继而把整张海报异常拉长。改为「每天一行、
+    // 中午/下午两列」，无论选择多少天，歌名列都保有稳定的可读宽度。
+    const colCount = 3
     const type: SongType = "broadcast"
 
-    const headerCells = [
-      cellHtml("", true, false, 0, colCount, 0, "slot", type),
-      ...dates.map((date, i) => cellHtml(dateCellHtml(date), true, false, i + 1, colCount, 0, "slot", type)),
-    ].join("")
+    const headerCells = ["", "中午", "下午"]
+      .map((label, colIdx) => cellHtml(label, true, colIdx === 0, colIdx, colCount, 0, "slot", type))
+      .join("")
     const headerRow = rowHtml(headerCells, true, 0)
 
-    const dataRows = rowLabels
-      .map((label, rowIdx) => {
+    const dataRows = dates
+      .map((date, rowIdx) => {
+        const songs = songsStore.broadcastSongs.filter((s) => s.date === date)
         const cells = [
-          cellHtml(label, false, true, 0, colCount, rowIdx + 1, "slot", type),
-          ...dates.map((date, colIdx) => {
-            const songs = songsStore.broadcastSongs.filter((s) => s.date === date)
-            const targetSongs = songs.filter((s) => periodOf(s) === (rowIdx === 0 ? "noon" : "afternoon"))
+          cellHtml(dateCellHtml(date), false, true, 0, colCount, rowIdx + 1, "slot", type),
+          ...(["noon", "afternoon"] as const).map((period, colIdx) => {
+            const targetSongs = songs.filter((s) => periodOf(s) === period)
             const parts: string[] = []
-            if (rowIdx === 1) {
+            if (period === "afternoon") {
               const lbl = afternoonLabelHtml(date)
               if (lbl) parts.push(lbl)
             }
@@ -669,7 +670,7 @@ export function useExportImage() {
       })
       .join("")
 
-    return gridWrapperHtml(headerRow + dataRows, colCount, 2, true, type)
+    return gridWrapperHtml(headerRow + dataRows, colCount, dates.length, true, type)
   }
 
   function gridWrapperHtml(
