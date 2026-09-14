@@ -9,14 +9,13 @@
 
 ## 资源准备
 
-`build.py` 在构建安装程序前会自动把以下资源复制到 `installer/res/`：
+`npm run build:installer` 在构建安装程序前会自动把以下资源复制到 `installer/res/`：
 
 - `GoServer/assets/icon-bc.ico` → `res/icon-bc.ico`
 - `Web/public/logo.png` → `res/logo.png`
 - `Web/dist/fonts/江西拙楷3.0.ttf` → `res/font_jiangxi_zhuokai.ttf`（构建时按用字精简后的字体）
 - `Web/dist/fonts/方正颜宋简体.ttf` → `res/font_fangzheng_yansong.ttf`（构建时按用字精简后的字体）
 - `dist/bctools.exe` → `res/bctools.exe`
-- `dist/bctool_dev.exe` → `res/bctool_dev.exe`
 
 手动准备时：
 
@@ -27,7 +26,6 @@ cp ../Web/public/logo.png                   res/logo.png
 cp "../Web/dist/fonts/江西拙楷3.0.ttf"      res/font_jiangxi_zhuokai.ttf
 cp "../Web/dist/fonts/方正颜宋简体.ttf"     res/font_fangzheng_yansong.ttf
 cp ../dist/bctools.exe                      res/bctools.exe
-cp ../dist/bctool_dev.exe                   res/bctool_dev.exe
 ```
 
 ## 编译

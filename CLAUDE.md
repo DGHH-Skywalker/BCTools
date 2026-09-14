@@ -12,8 +12,8 @@
 | 进程生命周期 | `GoServer/handlers/lifecycle.go`（health / watch / shutdown） |
 | 前端入口 | `Web/src/main.ts` |
 | 前端路由 | `Web/src/router/index.ts` |
-| 整库一键 dev / build | 根 `package.json`（`npm run dev` / `npm run build`，5.6.0 主入口） |
-| 完整发布构建（含安装程序） | `npm run build:full` 或 `python build.py` |
+| 整库一键 dev / build | 根 `package.json`（`npm run dev` / `npm run build`） |
+| 完整发布构建（含安装程序） | `npm run build` |
 | 版本唯一源 | `GoServer/internal/version/version.go` |
 | 数据持久化 | `GoServer/internal/repo/repo.go` |
 | 安装程序源码 | `installer/`（C++ Win32/GDI+） |
@@ -31,7 +31,6 @@ BCTools/
 ├── package.json        整库 dev / build 入口
 ├── DEVELOPER.md        开发者上手文档（环境、构建、约束、常见问题）
 ├── CLAUDE.md           本文件：给 Agent 的工作约束
-└── build.py            旧版 Python 构建脚本（5.6.0 之前的主入口，npm 链是新推荐）
 ```
 
 ## 架构约定
@@ -122,7 +121,7 @@ npm install
 # 开发：vite 热更新 + go run 后端（--dev 会顶替已运行的后端）并行
 npm run dev
 
-# 构建：vite build → 嵌入到 GoServer/embed/dist → go build 产出 dist/bctools.exe
+# 构建：并行准备 Vue、um-react、FFmpeg，再产出主程序与安装包
 npm run build
 
 # 单独运行子步骤
@@ -130,18 +129,11 @@ npm run dev:web              # 仅 vite
 npm run dev:server           # 仅 go run
 npm run build:web            # 仅 vite build + 字体精简
 npm run build:copy           # 复制 Web/dist → GoServer/embed/dist
+npm run build:um-react       # 仅 um-react 构建与嵌入
 npm run build:server         # 仅 go build
-npm run build:dev-server     # 产出 dist/bctool_dev.exe（带托盘、--dev 默认开）
+npm run build:installer      # 仅安装程序
 npm run build:clean          # 清理所有构建产物
 ```
-
-发布完整安装包（前端 + um-react + 后端 + 安装程序 + ffmpeg 注入）请用 Python 构建：
-
-```bash
-python build.py
-```
-
-> 区别：`npm run build` 产物只有 `dist/bctools.exe`；`python build.py` 还会构建 um-react、产出 `BCTools-Setup.exe` 安装程序（需 MinGW-w64），并把精简版 ffmpeg/ffprobe 注入二进制。
 
 ## 测试
 
@@ -167,8 +159,7 @@ go test ./...
 
 ## 构建产物
 
-运行 `python build.py` 后产物输出到 `dist/`：
+运行 `npm run build` 后产物输出到 `dist/`：
 
 - `bctools.exe`
-- `bctool_dev.exe`
 - `BCTools-Setup.exe`（需要 MinGW-w64）

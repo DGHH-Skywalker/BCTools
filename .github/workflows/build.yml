@@ -2,91 +2,85 @@ name: Build
 
 on:
   push:
-    branches: [master, main]
+    branches: [main]
   pull_request:
-    branches: [master, main]
+    branches: [main]
   workflow_dispatch:
 
-# 只需读取仓库内容；不写回仓库，也不需要额外密钥。
 permissions:
   contents: read
 
 concurrency:
-  # 同一分支的新提交会取消仍在跑的旧构建，避免排队浪费
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: "24.7.0"
+  PNPM_VERSION: "10.15.1"
+
 jobs:
-  # ---------------------------------------------------------------------------
-  # 测试：跨平台可跑的部分（不需要 ffmpeg 二进制、不需要 MinGW）
-  # ---------------------------------------------------------------------------
   test:
-    name: 测试
+    name: Test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          # um-react 是 submodule，前端构建需要它
           submodules: recursive
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.25.7"
           cache-dependency-path: GoServer/go.sum
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: Web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            Web/package-lock.json
 
-      - name: 后端 vet
-        working-directory: GoServer
-        run: go vet ./...
+      - name: Use the pinned pnpm version
+        run: corepack install --global pnpm@${{ env.PNPM_VERSION }}
 
-      - name: 后端测试
-        working-directory: GoServer
-        run: go test ./...
+      - name: Install root dependencies
+        run: npm ci
 
-      - name: 前端依赖
-        working-directory: Web
-        run: npm ci --legacy-peer-deps
+      - name: Install Vue dependencies
+        run: npm --prefix Web ci --legacy-peer-deps
 
-      - name: 前端类型检查
-        working-directory: Web
-        run: npm run type-check
+      - name: Install React dependencies
+        run: corepack pnpm --dir Web/um-react install --frozen-lockfile
 
-      - name: 前端测试
-        working-directory: Web
-        run: npm run test
+      - name: Go vet
+        run: go -C GoServer vet -mod=readonly ./...
 
-  # ---------------------------------------------------------------------------
-  # 构建精简版 ffmpeg/ffprobe。
-  #
-  # 这两个二进制不入库（.gitignore 排除了 *.exe），所以 CI 必须自己编。
-  # 编译很慢（约 20-40 分钟），因此按 build.sh 的哈希做缓存：脚本没变就直接复用。
-  # ---------------------------------------------------------------------------
+      - name: Go tests
+        run: go -C GoServer test -mod=readonly ./...
+
+      - name: Vue type check
+        run: npm --prefix Web run type-check
+
+      - name: Vue tests
+        run: npm --prefix Web run test
+
+      - name: React type check
+        run: corepack pnpm --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
+
   ffmpeg:
-    name: 精简版 ffmpeg
+    name: Build bundled FFmpeg
     runs-on: windows-latest
-    outputs:
-      cache-key: ${{ steps.key.outputs.value }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: 计算缓存 key
-        id: key
-        shell: bash
-        run: echo "value=ffmpeg-mini-${{ runner.os }}-$(sha256sum GoServer/ffmpeg_bctools_mini/build.sh | cut -c1-16)" >> "$GITHUB_OUTPUT"
-
-      - name: 尝试命中缓存
+      - name: Restore FFmpeg cache
         id: cache
         uses: actions/cache@v4
         with:
           path: GoServer/ffmpeg_bctools_mini/dist
-          key: ${{ steps.key.outputs.value }}
+          key: ffmpeg-mini-${{ runner.os }}-${{ hashFiles('GoServer/ffmpeg_bctools_mini/build.sh') }}
 
-      - name: 安装 MSYS2（仅在未命中缓存时）
+      - name: Install MSYS2 dependencies
         if: steps.cache.outputs.cache-hit != 'true'
         uses: msys2/setup-msys2@v2
         with:
@@ -101,13 +95,13 @@ jobs:
             make
             pkg-config
 
-      - name: 编译（仅在未命中缓存时）
+      - name: Build bundled FFmpeg
         if: steps.cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         working-directory: GoServer/ffmpeg_bctools_mini
         run: bash build.sh
 
-      - name: 校验产物
+      - name: Validate bundled FFmpeg
         shell: bash
         working-directory: GoServer/ffmpeg_bctools_mini/dist
         run: |
@@ -120,11 +114,8 @@ jobs:
           path: GoServer/ffmpeg_bctools_mini/dist/*.exe
           retention-days: 1
 
-  # ---------------------------------------------------------------------------
-  # 完整构建：前端 + um-react + 后端 + 安装程序
-  # ---------------------------------------------------------------------------
   build:
-    name: 完整构建
+    name: Build Windows artifacts
     needs: [test, ffmpeg]
     runs-on: windows-latest
     steps:
@@ -134,51 +125,62 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.25.7"
           cache-dependency-path: GoServer/go.sum
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: Web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            Web/package-lock.json
 
-      - uses: actions/setup-python@v5
+      - uses: msys2/setup-msys2@v2
         with:
-          python-version: "3.12"
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-toolchain
+            make
 
-      - name: 取回精简版 ffmpeg
+      - name: Add MinGW-w64 to PATH
+        shell: pwsh
+        run: 'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Use the pinned pnpm version
+        run: corepack install --global pnpm@${{ env.PNPM_VERSION }}
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Vue dependencies
+        run: npm --prefix Web ci --legacy-peer-deps
+
+      - name: Install React dependencies
+        run: corepack pnpm --dir Web/um-react install --frozen-lockfile
+
+      - name: Download bundled FFmpeg
         uses: actions/download-artifact@v4
         with:
           name: ffmpeg-mini
           path: GoServer/ffmpeg_bctools_mini/dist
 
-      - name: 启用 corepack（um-react 用 pnpm）
-        run: corepack enable
+      - name: Build
+        run: npm run build
 
-      # windows-latest 自带 MinGW（用于编译 C++ 安装程序），确认一下
-      - name: 检查 g++
-        run: g++ --version
-
-      - name: 构建
-        run: python build.py --no-mirror
-
-      - name: 列出产物
+      - name: List artifacts
         shell: bash
         run: ls -lh dist/
 
-      - name: 上传主程序
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: bctools-${{ github.sha }}
-          path: |
-            dist/bctools.exe
-            dist/bctool_dev.exe
+          path: dist/bctools.exe
           if-no-files-found: error
           retention-days: 14
 
-      - name: 上传安装程序
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: BCTools-Setup-${{ github.sha }}
           path: dist/BCTools-Setup.exe

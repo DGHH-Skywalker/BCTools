@@ -18,7 +18,7 @@
  * (it finds the card's native 删除 button and clicks it), then deletes the stage.
  * um-react is never closed or navigated away.
  *
- * This script is injected into um-react's index.html by build.py and does NOT
+ * This script is injected into um-react's index.html by the root npm build and does NOT
  * modify any um-react source, so updating um-react from upstream won't break it.
  */
 (function () {

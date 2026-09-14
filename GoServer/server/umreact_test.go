@@ -13,14 +13,13 @@ import (
 // TestServeUMReact 验证 um-react 静态托管的关键行为：根路径返回 index.html、
 // 未知路径 SPA 回退到 index.html、wasm 资源带正确的 Content-Type。
 //
-// 依赖 GoServer/embed/um-react 下的真实构建产物（由 python build.py 生成）。
-// 若仅存在占位 index.html（如 --skip-um-react 构建），则跳过。
+// 依赖 GoServer/embed/um-react 下由 npm 构建流程生成的真实产物。
 func TestServeUMReact(t *testing.T) {
 	dir := filepath.Join("..", "embed", "um-react")
 	assetsDir := filepath.Join(dir, "assets")
 	entries, err := os.ReadDir(assetsDir)
 	if err != nil {
-		t.Skipf("um-react 未构建（%s 不存在），跳过：请运行 python build.py", assetsDir)
+		t.Skipf("um-react 未构建（%s 不存在），跳过：请运行 npm run build:um-react", assetsDir)
 	}
 	var wasmName string
 	for _, e := range entries {

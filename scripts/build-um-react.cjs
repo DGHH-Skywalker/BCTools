@@ -41,8 +41,7 @@ function findPnpm() {
   // 1) 直接 pnpm（全局安装）
   const r = spawnSync("pnpm", ["--version"], { stdio: "pipe", encoding: "utf8", shell: true })
   if (r.status === 0) return { cmd: "pnpm", args: [] }
-  // 2) corepack pnpm（不需要管理员写到 Program Files）
-  //    build.py 在 Windows 无管理员环境走的就是这条路。
+  // 2) corepack pnpm（不需要管理员写到 Program Files）。
   const r2 = spawnSync("corepack", ["pnpm", "--version"], {
     stdio: "pipe",
     encoding: "utf8",
@@ -62,7 +61,7 @@ const pnpmArgs = (...rest) => [...pnpm.args, ...rest]
 // um-react 自己的 package.json 里 build 末尾会再调一次 `pnpm build:finalize`。
 // 我们这里只暴露 corepack pnpm 给 PATH，um-react 的脚本里 `pnpm ...` 就解析
 // 不到。解决办法：把 corepack 自身的路径加到 PATH，并塞一个 pnpm.cmd shim 到
-// 当前 PATH 里的可写目录（build.py 也是这套思路）。
+// 当前 PATH 里的可写目录。
 function ensurePnpmShim() {
   if (pnpm.cmd === "pnpm") return {} // 已有真 pnpm，无需 shim
   // 找 corepack 所在目录（C:\Program Files\nodejs）

@@ -53,7 +53,7 @@ dist/
 
 ## 集成到 BroadcastTool
 
-BroadcastTool 的 `build.py` 会优先从 `ffmpeg_bctools_mini/dist/` 复制 `ffmpeg.exe` 和 `ffprobe.exe` 到最终 `dist/` 目录，与 `broadcast-tool.exe` 一起分发。
+根目录 `npm run build` 会从 `ffmpeg_bctools_mini/dist/` 复制 `ffmpeg.exe` 和 `ffprobe.exe` 到 Go 的嵌入目录，最终随 `bctools.exe` 一起分发。
 
 也可以手动复制，或直接把 `ffmpeg_bctools_mini/dist` 加到 PATH。
 

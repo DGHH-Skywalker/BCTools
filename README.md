@@ -60,9 +60,9 @@ BCTools 把这套流程做成了：
 
 ## 从源码构建
 
-需要：Go 1.22+、Node.js 18+、corepack（自带的，无需另装）、Windows。
-构建安装程序还需 MinGW-w64（`g++` 在 PATH 中）。**Python 3.10+ 仅在
-坚持用 `build.py` 旧入口时需要**——新入口是 npm。
+需要：Go 1.22+、Node.js 24+、corepack（自带的，无需另装）、Windows。
+构建安装程序还需 MinGW-w64（`g++` 在 PATH 中）。构建只使用根目录的 npm
+脚本，无需 Python。
 
 ```bash
 git clone <repo-url> BCTools      # 5.6.0 起 um-react 已直接放进仓库，无需 --recursive
@@ -70,7 +70,7 @@ cd BCTools
 npm install                       # 根 devDependencies（concurrently）
 npm --prefix Web install --legacy-peer-deps
 corepack pnpm --dir Web/um-react install --no-frozen-lockfile
-npm run build                     # 一条龙：前端 + um-react + ffmpeg 嵌入 + Go 编译
+npm run build                     # 并行准备前端 / um-react / ffmpeg，再编译主程序与安装包
 ```
 
 > 完整步骤、产物清单、版本号改哪几处等见 [DEVELOPER.md](./DEVELOPER.md)。
@@ -81,17 +81,16 @@ npm run build                     # 一条龙：前端 + um-react + ffmpeg 嵌�
 | 产物 | 说明 |
 |------|------|
 | `bctools.exe` | 主程序（单文件，内嵌前端 + ffmpeg） |
-| `bctool_dev.exe` | 开发模式启动器（替换已运行的后端） |
-| `bctools_test.exe` | 一次性测试版：端口 712，数据写 `%TEMP%`，退出即清 |
 | `BCTools-Setup.exe` | 安装程序 |
 
-常用参数：
+可单独执行的构建步骤：
 
 ```bash
-python build.py --skip-front      # 跳过前端构建
-python build.py --skip-um-react   # 跳过 um-react 子模块
-python build.py --skip-installer  # 跳过安装程序
-python build.py --clean           # 清理产物
+npm run build:web                 # Vue 构建与类型检查
+npm run build:um-react            # React 子项目构建并复制嵌入资源
+npm run build:server-only         # 仅编译主程序
+npm run build:installer           # 仅编译安装程序
+npm run build:clean               # 清理所有构建产物
 ```
 
 > `um-react` 是 Git submodule。忘记 `--recursive` 的话补一句
@@ -132,7 +131,7 @@ BCTools/
 │   └── um-react/        Unlock Music 子模块
 ├── installer/           C++ Win32/GDI+ 安装/卸载程序
 ├── docs/                设计与交接文档
-└── build.py             一键构建脚本
+└── package.json          一体化开发与构建入口
 ```
 
 API 文档见 [`GoServer/docs/api.md`](GoServer/docs/api.md)。

@@ -1,25 +1,25 @@
 name: Release
 
-# 打 tag 时自动构建并发布 Release。
-#
-#   git tag v5.5.0.0 && git push origin v5.5.0.0
-#
-# 不需要额外密钥：GITHUB_TOKEN 由 Actions 自动注入。
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "要发布的 tag（需已存在）"
+        description: Existing tag to build and publish
         required: true
+        type: string
 
 permissions:
-  contents: write # 创建 Release 需要写权限
+  contents: write
+
+env:
+  NODE_VERSION: "24.7.0"
+  PNPM_VERSION: "10.15.1"
 
 jobs:
   release:
-    name: 构建并发布
+    name: Build and publish
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,29 +29,25 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.25.7"
           cache-dependency-path: GoServer/go.sum
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: Web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            Web/package-lock.json
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      # 精简版 ffmpeg 不入库，需要现编。按 build.sh 哈希缓存，避免每次发版都等半小时。
-      - name: ffmpeg 缓存
+      - name: Restore FFmpeg cache
         id: cache
         uses: actions/cache@v4
         with:
           path: GoServer/ffmpeg_bctools_mini/dist
           key: ffmpeg-mini-${{ runner.os }}-${{ hashFiles('GoServer/ffmpeg_bctools_mini/build.sh') }}
 
-      - name: 安装 MSYS2（仅在未命中缓存时）
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Install MSYS2 dependencies
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -65,30 +61,43 @@ jobs:
             make
             pkg-config
 
-      - name: 编译 ffmpeg（仅在未命中缓存时）
+      - name: Build bundled FFmpeg
         if: steps.cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         working-directory: GoServer/ffmpeg_bctools_mini
         run: bash build.sh
 
-      - name: 启用 corepack
-        run: corepack enable
+      - name: Add MinGW-w64 to PATH
+        shell: pwsh
+        run: 'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: 构建
-        run: python build.py --no-mirror
+      - name: Use the pinned pnpm version
+        run: corepack install --global pnpm@${{ env.PNPM_VERSION }}
 
-      - name: 计算校验和
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Vue dependencies
+        run: npm --prefix Web ci --legacy-peer-deps
+
+      - name: Install React dependencies
+        run: corepack pnpm --dir Web/um-react install --frozen-lockfile
+
+      - name: Build
+        run: npm run build
+
+      - name: Write checksums
         shell: bash
         working-directory: dist
         run: |
           sha256sum bctools.exe BCTools-Setup.exe > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: 发布 Release
+      - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          draft: true # 先建草稿，确认后手动点发布
+          draft: true
           generate_release_notes: true
           files: |
             dist/BCTools-Setup.exe

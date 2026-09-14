@@ -10,10 +10,10 @@ test:
 	cd GoServer && go test ./...
 
 lint:
-	cd GoServer && golangci-lint run ./...
+	npm --prefix Web run lint
 
 build:
-	python build.py
+	npm run build
 
 clean:
-	python build.py --clean
+	npm run build:clean

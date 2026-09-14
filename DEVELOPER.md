@@ -17,7 +17,6 @@
 
 构建产物：
 - `dist/bctools.exe` — 单文件主程序（含 Vue 前端、um-react、ffmpeg/ffprobe）
-- `dist/bctool_dev.exe` — 开发模式启动器
 - `dist/BCTools-Setup.exe` — Windows 安装包（可选，要 MinGW）
 
 ---
@@ -27,10 +26,9 @@
 | 工具 | 最低版本 | 检查 | 说明 |
 |------|--------|------|------|
 | Git | 2.30+ | `git --version` | clone 用 |
-| Node.js | 18+ | `node --version` | 前端 / 构建脚本 |
+| Node.js | 24+ | `node --version` | 前端 / 构建脚本 |
 | Go | 1.22+ | `go version` | 后端（推荐 1.24+） |
 | pnpm | 9+ | `pnpm --version` 或 `corepack pnpm --version` | um-react 依赖（**用 corepack 调即可，无需全局装**） |
-| Python | 3.10+ | `python --version` | **可选**：仍保留 `build.py` 作为另一条构建路径 |
 | MinGW-w64 | 8+ | `g++ --version` | **可选**：仅在跑 `npm run build:installer` 时需要 |
 
 无管理员权限也能跑：用 `corepack pnpm` 代替全局 pnpm；Go 装到用户目录也行。
@@ -84,22 +82,21 @@ npm run dev:server      # 仅 go run --dev
 
 ## 4. 构建
 
-### 4.1 完整构建（替代 build.py）
+### 4.1 完整构建
 
 ```bash
 npm run build
 ```
 
-等价于依次执行：
+构建会先并行准备 Vue、um-react 和 FFmpeg，再依次编译 Go 主程序与安装包：
 
 | 步骤 | 脚本 | 说明 |
 |------|------|------|
-| 1 | `build:web` | `Web/`：`npm install` + `npm run type-check` + `npm run build`（Vite + 字体精简） |
-| 2 | `build:copy` | `Web/dist` → `GoServer/embed/dist`（`go:embed` 要求） |
-| 3 | `build:um-react` | `Web/um-react/`：corepack pnpm install + pnpm build + 改路由 base + 注入桥接脚本 + 复制到 `GoServer/embed/um-react/` |
-| 4 | `build:inject-ffmpeg` | `GoServer/ffmpeg_bctools_mini/dist/{ffmpeg,ffprobe}.exe` → `GoServer/internal/binembed/bin/`（让 `go:embed` 打进单文件 exe） |
-| 5 | `build:server` | `go build -ldflags="-s -w -H windowsgui" -o dist/bctools.exe .` —— GUI 应用，启动不闪黑框 |
-| 6 | `build:installer` | 调用 MinGW-w64 编译 `installer/setup.exe`（C++ Win32/GDI+），**没有 MinGW 会跳过并打 warning，不影响主产物** |
+| 并行 1 | `build:web-and-copy` | `Web/`：类型检查、Vite 构建、复制到 `GoServer/embed/dist` |
+| 并行 2 | `build:um-react` | 构建、注入桥接脚本并复制到 `GoServer/embed/um-react/` |
+| 并行 3 | `build:inject-ffmpeg` | 将精简版 ffmpeg/ffprobe 放入 Go 的嵌入目录 |
+| 收敛 1 | `build:server` | 编译 `dist/bctools.exe`（GUI 应用，启动不闪黑框） |
+| 收敛 2 | `build:installer` | 编译 `dist/BCTools-Setup.exe`；缺少 MinGW 时会跳过并提示 |
 
 产物：
 - `dist/bctools.exe` ~45 MB（自带前端 + um-react + ffmpeg/ffprobe，GUI 应用）
@@ -141,19 +138,6 @@ npm run build:clean
 # 删除：Web/dist, GoServer/embed/dist, GoServer/embed/um-react,
 #       GoServer/internal/binembed/bin, dist/, installer/obj, installer/setup.exe
 ```
-
-### 4.5 传统 Python 脚本（备选）
-
-```bash
-python build.py                   # 完整
-python build.py --skip-front      # 跳前端
-python build.py --skip-back       # 跳后端
-python build.py --skip-um-react   # 跳 um-react
-python build.py --clean           # 清理
-```
-
-`build.py` 是 5.6.0 之前的官方构建脚本；功能与 `npm run build` 几乎完全对齐，
-npm 链是新推荐入口，build.py 仍保留供习惯使用。
 
 ### 4.6 数据迁移（5.6.0 完整版）
 
@@ -240,7 +224,7 @@ bctools/
 ├── package.json               根 npm 入口（dev / build 链）
 ├── DEVELOPER.md               ← 你正在看的文档
 ├── CLAUDE.md                  Claude/Agent 工作约束（项目内）
-└── build.py                   旧版 Python 构建脚本（仍可用）
+└── package.json               唯一的开发与构建入口
 ```
 
 ---
