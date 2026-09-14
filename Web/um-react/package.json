@@ -95,7 +95,8 @@
       "sql.js": "patches/sql.js.patch"
     },
     "overrides": {
-      "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@1.4.15"
+      "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@1.4.15",
+      "@swc/core": "1.10.7"
     },
     "onlyBuiltDependencies": [
       "@swc/core",

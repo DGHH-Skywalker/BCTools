@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,14 +26,32 @@ import (
 type SongHandler struct {
 	Songs         *songstore.SongStore
 	Snapshots     *snapshotstore.SnapshotStore
+	Library       *services.MusicLibrary
 	importService *services.ImportService
 }
 
-func NewSongHandler(songs *songstore.SongStore, snapshots *snapshotstore.SnapshotStore) *SongHandler {
+func NewSongHandler(songs *songstore.SongStore, snapshots *snapshotstore.SnapshotStore, library *services.MusicLibrary) *SongHandler {
 	return &SongHandler{
 		Songs:         songs,
 		Snapshots:     snapshots,
+		Library:       library,
 		importService: services.NewImportService(songs, snapshots),
+	}
+}
+
+// syncAfterChange 在歌曲增删改之后收敛周文件夹布局。失败只记日志不阻断响应：
+// data.json 已经更新成功，布局会在下一次同步/导出时自愈。
+func (h *SongHandler) syncAfterChange(songs ...models.Song) {
+	if h.Library == nil {
+		return
+	}
+	for _, s := range songs {
+		if s.Date == "" {
+			continue
+		}
+		if err := h.Library.SyncSongWeek(s); err != nil {
+			log.Printf("musiclibrary: sync week for song %d failed: %v", s.ID, err)
+		}
 	}
 }
 
@@ -126,6 +145,7 @@ func (h *SongHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "保存歌曲失败")
 		return
 	}
+	h.syncAfterChange(song)
 	h.Snapshots.EnsureDailySnapshot()
 	response.WriteCreated(w, song)
 }
@@ -190,6 +210,12 @@ func (h *SongHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 			req.Period = &period
 		}
 	}
+	// 先取旧值：日期/时段变更后需要同步旧布局（把音频搬离原编号）
+	oldSong, _, getErr := h.Songs.GetSongByID(id)
+	if getErr != nil {
+		response.WriteNotFoundError(w, "歌曲不存在")
+		return
+	}
 	song, err := h.Songs.UpdateSong(id, req)
 	if err == store.ErrNotFound {
 		response.WriteNotFoundError(w, "歌曲不存在")
@@ -201,6 +227,7 @@ func (h *SongHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "更新失败")
 		return
 	}
+	h.syncAfterChange(oldSong, song)
 	h.Snapshots.EnsureDailySnapshot()
 	response.WriteJSON(w, http.StatusOK, song)
 }
@@ -212,6 +239,12 @@ func (h *SongHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		response.WriteValidationError(w, "无效的歌曲 ID")
 		return
 	}
+	// 删除前取歌曲信息，用于同步周文件夹（时段可能从有歌变空、需要静音占位）
+	deletedSong, _, getErr := h.Songs.GetSongByID(id)
+	if getErr != nil {
+		response.WriteNotFoundError(w, "歌曲不存在")
+		return
+	}
 	if err := h.Songs.DeleteSong(id); err == store.ErrNotFound {
 		response.WriteNotFoundError(w, "歌曲不存在")
 		return
@@ -219,6 +252,7 @@ func (h *SongHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "删除失败")
 		return
 	}
+	h.syncAfterChange(deletedSong)
 	h.Snapshots.EnsureDailySnapshot()
 	response.WriteNoContent(w)
 }

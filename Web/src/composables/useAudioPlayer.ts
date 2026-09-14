@@ -106,14 +106,21 @@ audio.addEventListener("emptied", () => {
 })
 
 export function useAudioPlayer() {
-  function play(filePath: string, title = "") {
+  // 统一的播放身份标识：同一时段多首歌合并成一个文件后共享 FilePath，
+  // 仅靠 FilePath 已无法区分是哪一首，因此带 songId 的播放用 song:<id> 作为标识，
+  // 后端 /api/files/stream?songId= 会按 JSON 索引把对应片段无损拆出来单独播放。
+  function play(filePath: string, title = "", songId?: number) {
     if (!filePath) return
 
     error.value = ""
-    const url = `/api/files/stream?file=${encodeURIComponent(filePath)}`
+    const key = songId != null ? `song:${songId}` : filePath
+    const url =
+      songId != null
+        ? `/api/files/stream?songId=${songId}`
+        : `/api/files/stream?file=${encodeURIComponent(filePath)}`
 
     // 同一首歌：切换播放/暂停
-    if (currentFile.value === filePath) {
+    if (currentFile.value === key) {
       if (audio.paused) {
         audio.play().catch(() => {})
       } else {
@@ -127,7 +134,7 @@ export function useAudioPlayer() {
     audio.src = url
     audio.load()
     audio.play().catch(() => {})
-    currentFile.value = filePath
+    currentFile.value = key
     currentTitle.value = title
     isVisible.value = true
     updateMediaSession()

@@ -32,3 +32,11 @@ type DeletedSongLog struct {
 	TimeSlotLabel string `json:"timeSlotLabel"`
 	DeletedAt     string `json:"deletedAt"`
 }
+
+// ExportWeekResponse is the response for POST /api/files/export-week
+type ExportWeekResponse struct {
+	ConfirmNeeded bool     `json:"confirmNeeded,omitempty"`
+	ExistingFiles []string `json:"existingFiles,omitempty"`
+	TargetDir     string   `json:"targetDir,omitempty"`
+	FileCount     int      `json:"fileCount,omitempty"`
+}

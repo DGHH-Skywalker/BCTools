@@ -12,7 +12,9 @@
   <div v-else class="organize-page">
     <n-card class="organize-card">
       <n-space vertical size="large">
-        <n-space align="center" wrap>
+        <!-- 5.6.0 起 SD 卡目录选择已弃用（导出改为直接拷贝周文件夹到桌面）。
+             组件暂时隐藏但代码保留，需要时把 v-if 改回 true 即可恢复。 -->
+        <n-space v-if="false" align="center" wrap>
           <n-text>{{ t("organize.targetDir") }}:</n-text>
           <n-input :value="targetDirName || ''" :placeholder="t('organize.noTargetDir')" class="organize-dir-input-field" disabled />
           <n-button @click="browse">{{ t("organize.browse") }}</n-button>
@@ -39,14 +41,14 @@
       <n-card class="organize-card" :title="t('organize.weekDormPlaylist', { week: selectedWeek })">
         <DormPlaylistTable :dates="datesForWeek(selectedWeek)" :songs="songsStore.dormSongs" :timeSlots="settingsStore.timeSlots" />
         <n-space class="organize-week-actions">
-          <n-button type="primary" :disabled="!copyMode" :loading="copyingWeek" @click="copyWeek(selectedWeek)">{{ t("organize.copyToSD") }}</n-button>
+          <n-button type="primary" :loading="exportingWeek" @click="exportSelectedWeek">{{ t("organize.exportWeek") }}</n-button>
         </n-space>
       </n-card>
     </template>
 
     <n-empty v-else :description="t('organize.noWeeksSelected')" />
 
-    <n-modal v-model:show="showConfirm" preset="dialog" :title="t('organize.confirmOverwrite')" positive-text="确认覆盖" negative-text="取消" @positive-click="doPendingCopy(true)">
+    <n-modal v-model:show="showConfirm" preset="dialog" :title="t('organize.confirmOverwrite')" positive-text="确认覆盖" negative-text="取消" @positive-click="confirmOverwriteExport">
       <n-ul>
         <n-li v-for="f in existingFiles" :key="f">{{ f }}</n-li>
       </n-ul>
@@ -61,7 +63,7 @@ import { useI18n } from "../i18n"
 import { useTheme } from "../composables/useTheme"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
-import { organizeFiles, fetchSilentMP3, fetchMergedMP3, selectDir } from "../api/files"
+import { organizeFiles, fetchSilentMP3, fetchMergedMP3, selectDir, exportWeek } from "../api/files"
 import { useMessage } from "naive-ui"
 import type { SelectOption } from "naive-ui"
 import { dayjs } from "../utils/datetime"
@@ -138,6 +140,57 @@ function buildEntries(dates: string[]): ExportEntry[] {
   return buildExportEntries(dates, songsStore.dormSongs, settingsStore.timeSlots)
 }
 
+// ---------------------------------------------------------------------------
+// 5.6.0 导出歌曲文件：后端按「20xx年第N周」把整周文件夹拷贝到桌面
+// ---------------------------------------------------------------------------
+const exportingWeek = ref<boolean>(false)
+
+async function exportSelectedWeek() {
+  const week = selectedWeek.value
+  if (week == null || exportingWeek.value) return
+
+  // 整周没有任何排班歌时后端只会生成静音占位，直接前端提示更省一次交互
+  const entries = buildEntries(datesForWeek(week))
+  if (!hasAnySong(entries)) {
+    message.warning(t("organize.noSongsThisWeek"))
+    return
+  }
+
+  exportingWeek.value = true
+  try {
+    const res = await exportWeek(selectedYear.value, week, false)
+    if (res.confirmNeeded) {
+      existingFiles.value = res.existingFiles || []
+      showConfirm.value = true
+      return
+    }
+    message.success(t("organize.exportSuccess", { dir: res.targetDir, count: res.fileCount ?? 0 }))
+  } catch (err: any) {
+    message.error(err?.message || t("organize.organizeFailed"))
+  } finally {
+    exportingWeek.value = false
+  }
+}
+
+async function confirmOverwriteExport() {
+  const week = selectedWeek.value
+  if (week == null) return
+  exportingWeek.value = true
+  try {
+    const res = await exportWeek(selectedYear.value, week, true)
+    message.success(t("organize.exportSuccess", { dir: res.targetDir, count: res.fileCount ?? 0 }))
+  } catch (err: any) {
+    message.error(err?.message || t("organize.organizeFailed"))
+  } finally {
+    exportingWeek.value = false
+    showConfirm.value = false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 以下为 5.6.0 之前的「SD 卡目录复制」路径，已弃用（UI 已隐藏）。
+// 代码保留以便回退，恢复方法：把模板里 SD 卡目录选择 n-space 的 v-if 改回 true。
+// ---------------------------------------------------------------------------
 async function browse() {
   // 1. 优先使用后端原生文件夹对话框（Windows 桌面环境）
   try {

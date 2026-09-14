@@ -99,3 +99,29 @@ func stripID3v1(data []byte) []byte {
 	}
 	return data
 }
+
+// SplitID3Tags 把一个 MP3 文件拆成「ID3v2 头 + 裸音频帧 + ID3v1 尾」三段。
+//
+// 与 MergeMP3s 的拼接策略（只保留第一个文件的 ID3v2，剥掉全部 ID3v1）配套：
+// 合并前记录每个成员的两段标签与裸帧区间，之后就能无损还原出独立 MP3。
+// 没有对应标签时返回 nil。
+func SplitID3Tags(data []byte) (v2, v1, frames []byte) {
+	frames = data
+	if len(frames) >= 10 && string(frames[:3]) == "ID3" {
+		size := int(frames[6]&0x7F)<<21 | int(frames[7]&0x7F)<<14 |
+			int(frames[8]&0x7F)<<7 | int(frames[9]&0x7F)
+		total := 10 + size
+		if frames[5]&0x10 != 0 {
+			total += 10
+		}
+		if total > 0 && total <= len(frames) {
+			v2 = frames[:total]
+			frames = frames[total:]
+		}
+	}
+	if len(frames) >= 128 && string(frames[len(frames)-128:len(frames)-125]) == "TAG" {
+		v1 = frames[len(frames)-128:]
+		frames = frames[:len(frames)-128]
+	}
+	return v2, v1, frames
+}

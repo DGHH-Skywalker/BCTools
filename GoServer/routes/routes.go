@@ -16,7 +16,6 @@ type HandlerSet struct {
 	Network   *handlers.NetworkHandler
 	System    *handlers.SystemHandler
 	Decrypt   *handlers.DecryptHandler
-	Migration *handlers.MigrationHandler
 	Lifecycle *handlers.LifecycleHandler
 }
 
@@ -44,6 +43,7 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 			r.Post("/stash", hs.Files.HandleStash)
 			r.Post("/organize", hs.Files.HandleOrganize)
 			r.Post("/select-dir", hs.Files.HandleSelectDir)
+			r.Post("/export-week", hs.Files.HandleExportWeek)
 			r.Get("/browse", hs.Files.HandleBrowse)
 			r.Get("/stream", hs.Files.HandleStream)
 			r.Get("/silent", hs.Files.HandleSilent)
@@ -73,12 +73,5 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 			r.Post("/stage/{id}/imported", hs.Decrypt.HandleStageImported)
 			r.Delete("/stage/{id}", hs.Decrypt.HandleStageDelete)
 		})
-		if hs.Migration != nil {
-			r.Route("/migration", func(r chi.Router) {
-				r.Post("/preview", hs.Migration.HandlePreview)
-				r.Post("/export", hs.Migration.HandleExport)
-				r.Post("/import", hs.Migration.HandleImport)
-			})
-		}
 	})
 }

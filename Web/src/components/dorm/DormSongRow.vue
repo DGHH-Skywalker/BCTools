@@ -62,6 +62,7 @@
       size="tiny"
       :file-path="props.song.filePath"
       :title="props.song.title"
+      :song-id="props.song.id"
     />
     <n-button class="no-drag" size="tiny" type="error" @click="emit('remove', props.song.id)">
       <template #icon>

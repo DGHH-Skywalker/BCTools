@@ -99,6 +99,12 @@ export default defineConfig({
     },
   },
   build: {
+    // 锁 es2022：vite-plugin-top-level-await 在 generateBundle 后会再用 esbuild
+    // 把 esnext 代码转回 build.target。esbuild 0.28（Vite 7 自带）已不支持
+    // 默认的 chrome87/edge88/firefox78/safari14，转 destructuring 时会报
+    // "Transforming ... to ... is not supported yet"。es2022 覆盖所有用到的
+    // 语法且 0.28 仍兼容。
+    target: 'es2022',
     minify: true,
     rollupOptions: {
       output: {

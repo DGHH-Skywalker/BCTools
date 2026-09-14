@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"broadcast-tool/models"
@@ -16,14 +17,16 @@ type SettingsHandler struct {
 	Settings        *settingstore.SettingsStore
 	Songs           *songstore.SongStore
 	DeletedLog      *deletedlogstore.DeletedLogStore
+	Library         *services.MusicLibrary
 	settingsService *services.SettingsUpdateService
 }
 
-func NewSettingsHandler(settings *settingstore.SettingsStore, songs *songstore.SongStore, deletedLog *deletedlogstore.DeletedLogStore) *SettingsHandler {
+func NewSettingsHandler(settings *settingstore.SettingsStore, songs *songstore.SongStore, deletedLog *deletedlogstore.DeletedLogStore, library *services.MusicLibrary) *SettingsHandler {
 	return &SettingsHandler{
 		Settings:        settings,
 		Songs:           songs,
 		DeletedLog:      deletedLog,
+		Library:         library,
 		settingsService: services.NewSettingsUpdateService(settings, songs, deletedLog),
 	}
 }
@@ -63,6 +66,13 @@ func (h *SettingsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := h.Settings.UpdateSettings(req); err != nil {
 		response.WriteInternalError(w, "保存设置失败")
 		return
+	}
+
+	// 时段配置（新增/删除/排序）会改变周文件夹的编号锚点，全量重排。
+	if req.TimeSlots != nil && h.Library != nil {
+		if err := h.Library.SyncAll(); err != nil {
+			log.Printf("musiclibrary: resync after settings update failed: %v", err)
+		}
 	}
 
 	response.WriteJSON(w, http.StatusOK, h.Settings.GetSettings())

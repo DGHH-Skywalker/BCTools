@@ -1,6 +1,6 @@
 {
   "name": "xiaobo-frontend",
-  "version": "5.6.0.0",
+  "version": "5.7.0.0",
   "description": "小播点歌工具前端",
   "private": true,
   "type": "module",

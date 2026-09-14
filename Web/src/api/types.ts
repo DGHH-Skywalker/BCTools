@@ -74,6 +74,13 @@ export interface OrganizeResult {
   existingFiles?: string[]
 }
 
+export interface ExportWeekResult {
+  confirmNeeded?: boolean
+  existingFiles?: string[]
+  targetDir?: string
+  fileCount?: number
+}
+
 export interface UpdateCheckResult {
   hasUpdate: boolean
   latestVersion?: string

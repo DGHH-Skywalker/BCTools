@@ -15,6 +15,9 @@ type Data struct {
 	DormSongs      []models.Song   `json:"dormSongs"`
 	BroadcastSongs []models.Song   `json:"broadcastSongs"`
 	Settings       models.Settings `json:"settings"`
+	// Weeks 是周文件夹索引：周名（"2026年第34周"）-> 编号（"05"）-> 文件内容。
+	// 既是导出/播放的依据，也是合并文件成员的还原信息来源（见 models.WeekFile）。
+	Weeks map[string]map[string]models.WeekFile `json:"weeks,omitempty"`
 }
 
 func defaultBroadcastColumnMap() map[string]string {

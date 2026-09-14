@@ -202,14 +202,15 @@ func (h *DecryptHandler) HandleStageImport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	songsDir := paths.GetSongsDir(h.AppDataDir)
-	if err := paths.EnsureDir(songsDir); err != nil {
-		response.WriteInternalError(w, "创建歌曲目录失败")
+	// 产出先落暂存区，歌曲创建并分配时段后由 MusicLibrary 移入周文件夹
+	songsStaging := paths.GetSongStagingDir(h.AppDataDir)
+	if err := paths.EnsureDir(songsStaging); err != nil {
+		response.WriteInternalError(w, "创建歌曲暂存目录失败")
 		return
 	}
 
 	id := uuid.New().String()
-	outputPath := filepath.Join(songsDir, id+".mp3")
+	outputPath := filepath.Join(songsStaging, id+".mp3")
 
 	// 标题优先取 um-react 交过来的原始文件名——它就是用户在 um-react 里看到的
 	// 那一行。这样常见情况下完全不必启动 ffprobe（实测一次 ~88ms，比复制 12MB

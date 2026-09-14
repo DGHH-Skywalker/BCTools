@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"broadcast-tool/converter"
@@ -22,11 +24,12 @@ import (
 type FileHandler struct {
 	AppDataDir      string
 	Converter       *converter.FFMpegConverter
+	Library         *services.MusicLibrary
 	organizeService *services.OrganizeService
 }
 
-func NewFileHandler(appDataDir string, c *converter.FFMpegConverter) *FileHandler {
-	h := &FileHandler{AppDataDir: appDataDir, Converter: c}
+func NewFileHandler(appDataDir string, c *converter.FFMpegConverter, library *services.MusicLibrary) *FileHandler {
+	h := &FileHandler{AppDataDir: appDataDir, Converter: c, Library: library}
 	h.organizeService = services.NewOrganizeService(
 		appDataDir,
 		c,
@@ -52,9 +55,11 @@ func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New().String()
 	tempDir := paths.GetTempDir(h.AppDataDir)
-	songsDir := paths.GetSongsDir(h.AppDataDir)
-	if err := paths.EnsureDir(songsDir); err != nil {
-		response.WriteInternalError(w, "创建歌曲目录失败")
+	// 产出先落在 MusicFiles/_staging 暂存区；歌曲创建并分配时段后，
+	// 由 MusicLibrary 移入对应的周文件夹（2026年第N周/NN.mp3）。
+	stagingDir := paths.GetSongStagingDir(h.AppDataDir)
+	if err := paths.EnsureDir(stagingDir); err != nil {
+		response.WriteInternalError(w, "创建歌曲暂存目录失败")
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(header.Filename))
@@ -71,7 +76,7 @@ func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 	io.Copy(out, file)
 	out.Close()
 
-	outputPath := filepath.Join(songsDir, id+".mp3")
+	outputPath := filepath.Join(stagingDir, id+".mp3")
 	result, err := h.Converter.ProcessFile(inputPath, outputPath)
 	if err != nil {
 		os.Remove(inputPath)
@@ -103,9 +108,9 @@ func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New().String()
 	tempDir := paths.GetTempDir(h.AppDataDir)
-	songsDir := paths.GetSongsDir(h.AppDataDir)
-	if err := paths.EnsureDir(songsDir); err != nil {
-		response.WriteInternalError(w, "创建歌曲目录失败")
+	stagingDir := paths.GetSongStagingDir(h.AppDataDir)
+	if err := paths.EnsureDir(stagingDir); err != nil {
+		response.WriteInternalError(w, "创建歌曲暂存目录失败")
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(header.Filename))
@@ -122,7 +127,7 @@ func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 	io.Copy(out, file)
 	out.Close()
 
-	outputPath := filepath.Join(songsDir, id+".mp3")
+	outputPath := filepath.Join(stagingDir, id+".mp3")
 	result, err := h.Converter.StashFile(inputPath, outputPath)
 	if err != nil {
 		result = converter.ProbeResult{}
@@ -238,13 +243,43 @@ func (h *FileHandler) HandleOrganize(w http.ResponseWriter, r *http.Request) {
 	response.WriteJSON(w, http.StatusOK, resp)
 }
 
+// HandleExportWeek 把某一周的文件夹（MusicFiles\<YYYY年第N周>，同步到最终
+// 形态后）整目录复制到桌面。桌面已有同名文件夹时先返回 confirmNeeded。
+//
+// 这是「导出歌曲文件」页面（原换卡工具）的主入口：不再需要选 SD 卡目录，
+// 导出产物就是存储布局本身。
+func (h *FileHandler) HandleExportWeek(w http.ResponseWriter, r *http.Request) {
+	var req models.ExportWeekRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.WriteValidationError(w, "请求体格式错误")
+		return
+	}
+	if req.Year < 1970 || req.Year > 2999 || req.Week < 1 || req.Week > 53 {
+		response.WriteValidationError(w, "year/week 参数非法")
+		return
+	}
+	weekName := fmt.Sprintf("%d年第%d周", req.Year, req.Week)
+	res, err := h.Library.ExportWeekToDesktop(weekName, req.Confirm)
+	if err != nil {
+		response.WriteValidationError(w, err.Error())
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, models.ExportWeekResponse{
+		ConfirmNeeded: res.ConfirmNeeded,
+		ExistingFiles: res.ExistingFiles,
+		TargetDir:     res.TargetDir,
+		FileCount:     res.FileCount,
+	})
+}
+
 func (h *FileHandler) validateSourcePath(src string) (string, error) {
 	appDataDir := h.AppDataDir
-	// Bare filenames are treated as songs dir files first, then temp dir (for backward compatibility)
+	// Bare filenames are treated as song staging files first, then temp dir
+	// (for backward compatibility)
 	if src != "" && !strings.ContainsAny(src, `/\`) {
-		songsPath := filepath.Join(paths.GetSongsDir(appDataDir), src)
-		if _, err := os.Stat(songsPath); err == nil {
-			src = songsPath
+		stagingPath := filepath.Join(paths.GetSongStagingDir(appDataDir), src)
+		if _, err := os.Stat(stagingPath); err == nil {
+			src = stagingPath
 		} else {
 			src = filepath.Join(paths.GetTempDir(appDataDir), src)
 		}
@@ -297,6 +332,10 @@ func validateOrganizeTargetDir(dir string) (string, error) {
 func (h *FileHandler) HandleSelectDir(w http.ResponseWriter, r *http.Request) {
 	path, err := selectDirectory("选择文件夹")
 	if err != nil {
+		// 之前完全静默吞掉错误，导致 Win10 上对话框不显示时无法排查。
+		// 现在至少在日志里留痕，前端仍按"用户取消"处理（path=""），
+		// 兜底走浏览器 File System Access API。
+		log.Printf("selectDirectory 失败: %v", err)
 		response.WriteJSON(w, http.StatusOK, models.SelectDirResponse{Path: ""})
 		return
 	}
@@ -304,15 +343,37 @@ func (h *FileHandler) HandleSelectDir(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FileHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	filename := r.URL.Query().Get("file")
-	if filename == "" {
-		response.WriteValidationError(w, "file 参数不能为空")
-		return
-	}
-	srcPath, err := h.validateSourcePath(filename)
-	if err != nil {
-		response.WriteValidationError(w, "非法文件路径")
-		return
+	// 优先按歌曲 ID 解析：合并文件的成员会抽出自己那一段单独播放；
+	// 没传 songId 时退回旧的 file 路径行为（organize 旧导出路径兼容）。
+	var srcPath string
+	var cleanup func()
+	if songIDStr := r.URL.Query().Get("songId"); songIDStr != "" {
+		id, err := strconv.ParseInt(songIDStr, 10, 64)
+		if err != nil {
+			response.WriteValidationError(w, "songId 参数非法")
+			return
+		}
+		path, cl, err := h.Library.SongAudioPath(id)
+		if err != nil {
+			response.WriteNotFoundError(w, "歌曲音频不存在")
+			return
+		}
+		srcPath, cleanup = path, cl
+		if cleanup != nil {
+			defer cleanup()
+		}
+	} else {
+		filename := r.URL.Query().Get("file")
+		if filename == "" {
+			response.WriteValidationError(w, "file 参数不能为空")
+			return
+		}
+		resolved, err := h.validateSourcePath(filename)
+		if err != nil {
+			response.WriteValidationError(w, "非法文件路径")
+			return
+		}
+		srcPath = resolved
 	}
 	info, err := os.Stat(srcPath)
 	if err != nil || info.IsDir() {

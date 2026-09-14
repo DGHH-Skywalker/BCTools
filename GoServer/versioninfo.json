@@ -2,13 +2,13 @@
   "FixedFileInfo": {
     "FileVersion": {
       "Major": 5,
-      "Minor": 6,
+      "Minor": 7,
       "Patch": 0,
       "Build": 0
     },
     "ProductVersion": {
       "Major": 5,
-      "Minor": 6,
+      "Minor": 7,
       "Patch": 0,
       "Build": 0
     },
@@ -22,12 +22,12 @@
     "Comments": "XiaoBo Song Request Tool",
     "CompanyName": "Egansama",
     "FileDescription": "小播点歌工具",
-    "FileVersion": "5.6.0.0",
+    "FileVersion": "5.7.0.0",
     "InternalName": "broadcast-tool",
     "LegalCopyright": "(c) 2026 Egansama",
     "OriginalFilename": "broadcast-tool.exe",
     "ProductName": "小播点歌工具",
-    "ProductVersion": "5.6.0.0"
+    "ProductVersion": "5.7.0.0"
   },
   "VarFileInfo": {
     "Translation": {

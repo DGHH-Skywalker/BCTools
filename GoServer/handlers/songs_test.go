@@ -24,7 +24,8 @@ func setupSongHandler(t *testing.T) (*SongHandler, string) {
 	}
 	songs := songstore.New(r)
 	snapshots := snapshotstore.New(r, func(format string, args ...interface{}) { t.Logf(format, args...) })
-	return NewSongHandler(songs, snapshots), dir
+	// Library 传 nil：这些用例不涉及音频文件，syncAfterChange 会跳过
+	return NewSongHandler(songs, snapshots, nil), dir
 }
 
 func TestHandleCreateAndGet(t *testing.T) {

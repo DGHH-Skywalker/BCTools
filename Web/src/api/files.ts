@@ -1,5 +1,5 @@
 import apiClient from "./client"
-import type { FileProcessResult, OrganizeResult } from "./types"
+import type { FileProcessResult, OrganizeResult, ExportWeekResult } from "./types"
 
 export async function processFile(file: File): Promise<FileProcessResult> {
   const form = new FormData()
@@ -27,6 +27,13 @@ export async function organizeFiles(data: {
   confirm?: boolean
 }): Promise<OrganizeResult> {
   const res = await apiClient.post("/files/organize", data)
+  return res.data
+}
+
+// exportWeek 把某一整周的歌曲以「20xx年第N周」文件夹的形式拷贝到桌面（5.6.0 后导出歌曲文件的主路径）。
+// 桌面已有同名文件夹时后端返回 confirmNeeded + existingFiles，带 confirm=true 重发即覆盖。
+export async function exportWeek(year: number, week: number, confirm = false): Promise<ExportWeekResult> {
+  const res = await apiClient.post("/files/export-week", { year, week, confirm })
   return res.data
 }
 

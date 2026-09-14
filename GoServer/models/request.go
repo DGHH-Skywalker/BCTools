@@ -52,6 +52,13 @@ type FailedItem struct {
 	Reason string `json:"reason"`
 }
 
+// ExportWeekRequest is the request body for POST /api/files/export-week
+type ExportWeekRequest struct {
+	Year    int  `json:"year"`
+	Week    int  `json:"week"`
+	Confirm bool `json:"confirm,omitempty"`
+}
+
 // AuthRequest is the request body for POST /api/auth/verify
 type AuthRequest struct {
 	Password string `json:"password"`

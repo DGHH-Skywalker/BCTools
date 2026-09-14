@@ -68,11 +68,11 @@ func TestStageImportMovesMP3InPlace(t *testing.T) {
 	if resp.TempFileName == "" {
 		t.Fatal("tempFileName must be set so the frontend can create the song")
 	}
-	// 文件必须真的落在 songs 目录，且字节未被改写（没重编码）。
-	out := filepath.Join(paths.GetSongsDir(dir), resp.TempFileName)
+	// 文件必须真的落在歌曲暂存区，且字节未被改写（没重编码）。
+	out := filepath.Join(paths.GetSongStagingDir(dir), resp.TempFileName)
 	got, err := os.ReadFile(out)
 	if err != nil {
-		t.Fatalf("output not in songs dir: %v", err)
+		t.Fatalf("output not in song staging dir: %v", err)
 	}
 	if string(got) != string(content) {
 		t.Fatal("bytes changed; audio was re-encoded instead of moved")

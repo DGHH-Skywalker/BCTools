@@ -93,20 +93,39 @@ func (c *FFMpegConverter) ConvertToMP3(inputPath, outputPath string) error {
 // DefaultSilentPlaceholder（17.43s），写死在这里就是为了和「按时段位置编号」
 // 这条契约绑死——任何想要「让用户可配」的尝试都会破坏编号与曲序的对应。
 func (c *FFMpegConverter) GenerateSilentMP3(outputPath string, duration time.Duration) error {
+	return c.generateSilent(outputPath, duration, false)
+}
+
+// GenerateSilentPlaceholderMP3 生成周文件夹里空时段的静音占位文件。
+// 与 GenerateSilentMP3 的区别：ID3 标签写入「空音频」，用户在播放器里浏览
+// 周文件夹时能一眼认出哪些编号是占位、不是真歌。
+func (c *FFMpegConverter) GenerateSilentPlaceholderMP3(outputPath string, duration time.Duration) error {
+	return c.generateSilent(outputPath, duration, true)
+}
+
+func (c *FFMpegConverter) generateSilent(outputPath string, duration time.Duration, tagged bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// ffmpeg 的 -t 接受浮点秒（"17.43"），用 time.Duration.Seconds() 直接给小数。
 	dur := fmt.Sprintf("%.3f", duration.Seconds())
-	cmd := createCommand(ctx, c.ffmpegPath,
+	args := []string{
 		"-y",
 		"-f", "lavfi",
 		"-i", "anullsrc=r=44100:cl=mono",
 		"-t", dur,
 		"-acodec", "libmp3lame",
 		"-q:a", "2",
-		outputPath,
-	)
+	}
+	if tagged {
+		args = append(args,
+			"-metadata", "title=空音频",
+			"-metadata", "artist=空音频",
+			"-metadata", "album=空音频",
+		)
+	}
+	args = append(args, outputPath)
+	cmd := createCommand(ctx, c.ffmpegPath, args...)
 	cmd.WaitDelay = 5 * time.Second
 	output, err := cmd.CombinedOutput()
 	if err != nil {

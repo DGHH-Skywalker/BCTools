@@ -48,6 +48,8 @@ static bool DeleteRecursiveInternal(const std::wstring& path) {
     do {
         std::wstring name = fd.cFileName;
         if (name == L"." || name == L"..") continue;
+        // BctoolData 是用户数据（歌曲 + data.json），卸载时保留
+        if (name == L"BctoolData") continue;
         std::wstring full = Utils::JoinPath(path, name);
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             DeleteRecursiveInternal(full);

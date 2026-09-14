@@ -48,7 +48,7 @@ var umReactFiles embed.FS
 
 // portStr / ephemeralStr 通过 ldflags -X 注入：
 //
-//	正式版（默认）: port=1743, ephemeral=false, 数据持久化于 %APPDATA%\BroadcastTool
+//	正式版（默认）: port=1743, ephemeral=false, 数据持久化于 <exe>\BctoolData
 //	一次性测试版  : port=712,  ephemeral=true,  数据写 %TEMP%\BCTools-test-<pid>，退出即清
 var (
 	portStr      = "1743"
@@ -72,9 +72,17 @@ func main() {
 	}
 	ephemeralMode, _ = strconv.ParseBool(ephemeralStr)
 
-	appDataDir, err := paths.GetAppDataDir()
+	// 5.7.0 起数据全部落在 exe 同目录的 BctoolData 下，迁移只需拷贝该目录。
+	// 旧版 %APPDATA%\BroadcastTool 首次启动时自动迁入（原目录保留作备份）。
+	appDataDir, err := paths.GetDataRootDir()
 	if err != nil {
-		log.Fatalf("Cannot get APPDATA: %v", err)
+		log.Fatalf("Cannot resolve data root dir: %v", err)
+	}
+	migratedLegacy := false
+	if !ephemeralMode {
+		migratedLegacy = services.PrepareLegacyMigration(appDataDir, func(format string, args ...interface{}) {
+			log.Printf(format, args...)
+		})
 	}
 
 	if ephemeralMode {
@@ -117,7 +125,7 @@ func main() {
 		}
 	}
 
-	shutdown := runBackend(appDataDir, port, true)
+	shutdown := runBackend(appDataDir, port, true, migratedLegacy)
 
 	// 主 goroutine 交给托盘：systray 在 init() 里 LockOSThread，
 	// 消息循环只能跑在启动它的那个 OS 线程上。
@@ -139,12 +147,13 @@ func main() {
 
 // runBackend 初始化并启动后端服务，返回一个幂等的关闭函数。
 // 它不再阻塞——主 goroutine 要留给托盘消息循环。
-func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown func()) {
+func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLegacy bool) (shutdown func()) {
 	// 1. Init app data directories
 	for _, dir := range []string{
 		appDataDir,
 		paths.GetTempDir(appDataDir),
-		paths.GetSongsDir(appDataDir),
+		paths.GetMusicFilesDir(appDataDir),
+		paths.GetSongStagingDir(appDataDir),
 		paths.GetSnapshotsDir(appDataDir),
 		paths.GetLogsDir(appDataDir),
 		paths.GetBinDir(appDataDir),
@@ -213,6 +222,13 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown f
 	}
 	conv := converter.New(ffmpegPath, ffprobePath)
 
+	// 6. MusicLibrary：周文件夹（MusicFiles\<YYYY年第N周>）布局引擎
+	library := services.NewMusicLibrary(appDataDir, repo, conv, logger)
+	if migratedLegacy {
+		// 阶段二：旧 uuid 歌曲文件倒进暂存区后按周重建布局
+		services.FinishLegacyMigration(appDataDir, library, logger)
+	}
+
 	// 7. Setup router with middleware
 	r := chi.NewRouter()
 	r.Use(middleware.CORS)
@@ -231,18 +247,15 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool) (shutdown f
 	})
 
 	routes.RegisterRoutes(r, routes.HandlerSet{
-		Songs:    handlers.NewSongHandler(songStore, snapshotStore),
-		Files:    handlers.NewFileHandler(appDataDir, conv),
+		Songs:    handlers.NewSongHandler(songStore, snapshotStore, library),
+		Files:    handlers.NewFileHandler(appDataDir, conv, library),
 		Auth:     handlers.NewAuthHandler(settingsStore),
-		Settings: handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore),
+		Settings: handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore, library),
 		Snapshot: handlers.NewSnapshotHandler(snapshotStore),
 		Update:   handlers.NewUpdateHandler(settingsStore),
 		Network:  handlers.NewNetworkHandler(port),
 		System:   handlers.NewSystemHandler(appDataDir, version.Version),
 		Decrypt:  handlers.NewDecryptHandler(appDataDir, conv),
-		Migration: handlers.NewMigrationHandler(
-			services.NewMigrationService(appDataDir, repo, songStore, settingsStore, deletedLogStore),
-		),
 		Lifecycle: lifecycle,
 	})
 
