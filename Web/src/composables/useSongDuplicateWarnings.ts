@@ -8,9 +8,9 @@ export function useSongDuplicateWarnings(_type: SongType) {
   const songsStore = useSongsStore()
   const settingsStore = useSettingsStore()
 
-  function findWarnings(song: Pick<Song, "id" | "title" | "date">): Song[] {
+  function findWarnings(song: Pick<Song, "id" | "title" | "date">, source?: Song[]): Song[] {
     // 两份歌单共用同一个播出资源，重复提醒必须跨歌单生效。
-    const songs = [...songsStore.dormSongs, ...songsStore.broadcastSongs]
+    const songs = source || [...songsStore.dormSongs, ...songsStore.broadcastSongs]
     return findSimilarSongs(song.title, song.date, songs, settingsStore.duplicateCheckDays || 30, {
       includeSameDate: true,
       excludeSongId: song.id,

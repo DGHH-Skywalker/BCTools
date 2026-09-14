@@ -38,8 +38,13 @@ const routes: RouteRecordRaw[] = [
     path: "/settings",
     component: AppLayout,
     children: [
-      { path: "", component: () => import("../views/Settings.vue"), meta: { title: "软件设置" } },
-      { path: "guide", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } },
+      { path: "", component: () => import("../views/Settings.vue"), children: [
+        { path: "", component: () => import("../views/SettingsOverview.vue"), meta: { title: "软件设置" } },
+        { path: "slots", component: () => import("../views/DormTimeSlots.vue"), meta: { title: "时段配置" } },
+        { path: "broadcast", component: () => import("../views/BroadcastSettings.vue"), meta: { title: "播音栏目" } },
+        { path: "export", component: () => import("../views/ExportSettings.vue"), meta: { title: "导出偏好" } },
+        { path: "guide", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } },
+      ] },
     ],
   },
   { path: "/about-software", redirect: "/settings" },

@@ -42,6 +42,7 @@ func (h *SettingsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		response.WriteValidationError(w, "请求体格式错误")
 		return
 	}
+	h.settingsService.ReconcileTimeSlots(&req)
 
 	if affected := h.settingsService.CheckTimeSlotDeletion(req); affected > 0 {
 		response.WriteJSON(w, http.StatusOK, models.SettingsConfirmResponse{

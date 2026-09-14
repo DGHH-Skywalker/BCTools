@@ -15,21 +15,20 @@
 
     <BroadcastGrid :week-dates="weekDates" :column-map="settingsStore.broadcastColumnMap" />
 
-    <SettingsFab style="bottom:24px;right:24px;" @click="showColumnMapModal = true">
+    <SettingsFab style="bottom:24px;right:24px;" @click="router.push('/settings/broadcast')">
       <template #icon>
         <Calendar theme="outline" :size="22" :strokeWidth="3" />
       </template>
     </SettingsFab>
-    <BroadcastColumnMapModal v-model:show="showColumnMapModal" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue"
+import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
 import BroadcastGrid from "../components/broadcast/BroadcastGrid.vue"
-import BroadcastColumnMapModal from "../components/broadcast/BroadcastColumnMapModal.vue"
 import SettingsFab from "../components/ui/SettingsFab.vue"
 import { Left, Right, Calendar } from "@icon-park/vue-next"
 import { dayjs } from "../utils/datetime"
@@ -39,7 +38,7 @@ const { t } = useI18n()
 const settingsStore = useSettingsStore()
 
 const currentWeek = ref(dayjs().startOf("isoWeek"))
-const showColumnMapModal = ref(false)
+const router = useRouter()
 
 const weekDates = computed(() => {
   const dates: string[] = []

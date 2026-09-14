@@ -55,6 +55,12 @@ func (h *SongHandler) syncAfterChange(songs ...models.Song) {
 	}
 }
 
+// scheduleSyncAfterChange keeps editing responsive. The playlist is already
+// committed; a later export also performs a full synchronization.
+func (h *SongHandler) scheduleSyncAfterChange(songs ...models.Song) {
+	go h.syncAfterChange(songs...)
+}
+
 func (h *SongHandler) HandleSort(w http.ResponseWriter, r *http.Request) {
 	songType := r.URL.Query().Get("type")
 	if songType != "dorm" {
@@ -145,7 +151,7 @@ func (h *SongHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "保存歌曲失败")
 		return
 	}
-	h.syncAfterChange(song)
+	h.scheduleSyncAfterChange(song)
 	h.Snapshots.EnsureDailySnapshot()
 	response.WriteCreated(w, song)
 }
@@ -227,7 +233,7 @@ func (h *SongHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "更新失败")
 		return
 	}
-	h.syncAfterChange(oldSong, song)
+	h.scheduleSyncAfterChange(oldSong, song)
 	h.Snapshots.EnsureDailySnapshot()
 	response.WriteJSON(w, http.StatusOK, song)
 }
@@ -252,7 +258,7 @@ func (h *SongHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "删除失败")
 		return
 	}
-	h.syncAfterChange(deletedSong)
+	h.scheduleSyncAfterChange(deletedSong)
 	h.Snapshots.EnsureDailySnapshot()
 	response.WriteNoContent(w)
 }

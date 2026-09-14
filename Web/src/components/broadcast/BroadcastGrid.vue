@@ -15,13 +15,13 @@
           <n-space v-for="song in songsFor(date, period.key)" :key="song.id" align="center" style="width:100%;">
             <div style="flex:1;min-width:0;">
               <n-input
-                :value="song.title"
+                :value="titleDrafts[song.id] ?? song.title"
                 size="small"
                 @update:value="(v: string) => updateTitle(song.id, v)"
-                @blur="saveTitle(song.id, song.title)"
+                @blur="saveTitle(song.id, titleDrafts[song.id] ?? song.title)"
               />
-              <div v-if="duplicateWarnings(song).length" class="duplicate-warning">
-                <div v-for="warning in duplicateWarnings(song)" :key="warning.id">
+              <div v-if="warningsFor(song).length" class="duplicate-warning">
+                <div v-for="warning in warningsFor(song)" :key="warning.id">
                   {{ t("dorm.duplicateWarning", { date: warning.date, title: warning.title }) }}
                 </div>
               </div>
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue"
+import { computed, onMounted, ref } from "vue"
 import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
 import { useSongDuplicateWarnings } from "../../composables/useSongDuplicateWarnings"
@@ -62,23 +62,17 @@ const props = defineProps<{
 const { t, weekdayName } = useI18n()
 const songsStore = useSongsStore()
 const { findWarnings: duplicateWarnings } = useSongDuplicateWarnings("broadcast")
-
-const editingSongs = ref<Song[]>([])
+const titleDrafts = ref<Record<number, string>>({})
 
 const periods = computed(() => [
   { key: "noon" as const, label: t("broadcast.noon") },
   { key: "afternoon" as const, label: t("broadcast.afternoon") },
 ])
 
-const sourceList = computed(() => songsStore.broadcastSongs)
-
-watch(
-  sourceList,
-  (val) => {
-    editingSongs.value = JSON.parse(JSON.stringify(val))
-  },
-  { immediate: true, deep: true }
-)
+const warningMap = computed(() => {
+  const allSongs = [...songsStore.dormSongs, ...songsStore.broadcastSongs]
+  return new Map(songsStore.broadcastSongs.map((song) => [song.id, duplicateWarnings(song, allSongs)]))
+})
 
 function dayLabel(date: string): string {
   const idx = dayIndexFromDate(date)
@@ -92,7 +86,7 @@ function dayIndexFromDate(dateStr: string): number {
 }
 
 function songsFor(date: string, period: "noon" | "afternoon"): Song[] {
-  return editingSongs.value
+  return songsStore.broadcastSongs
     .filter((s) => {
       if (s.date !== date) return false
       const p = s.period || defaultPeriod(s)
@@ -105,23 +99,17 @@ function defaultPeriod(s: Song): "noon" | "afternoon" {
   return s.createdAt ? (dayjs(s.createdAt).hour() < 12 ? "noon" : "afternoon") : "afternoon"
 }
 
-function updateLocalTitle(id: number, title: string) {
-  const idx = editingSongs.value.findIndex((s) => s.id === id)
-  if (idx >= 0) {
-    editingSongs.value[idx] = { ...editingSongs.value[idx], title }
+async function saveTitle(id: number, title: string) {
+  try {
+    await songsStore.updateSong(id, { title })
+    delete titleDrafts.value[id]
+  } catch (err: any) {
+    console.error(err)
   }
 }
 
 function updateTitle(id: number, title: string) {
-  updateLocalTitle(id, title)
-}
-
-async function saveTitle(id: number, title: string) {
-  try {
-    await songsStore.updateSong(id, { title })
-  } catch (err: any) {
-    console.error(err)
-  }
+  titleDrafts.value[id] = title
 }
 
 async function addSong(date: string, period: "noon" | "afternoon") {
@@ -135,10 +123,13 @@ async function addSong(date: string, period: "noon" | "afternoon") {
 async function removeSong(id: number) {
   try {
     await songsStore.deleteSong(id)
-    editingSongs.value = editingSongs.value.filter((s) => s.id !== id)
   } catch (err: any) {
     console.error(err)
   }
+}
+
+function warningsFor(song: Song) {
+  return warningMap.value.get(song.id) || []
 }
 
 onMounted(() => {

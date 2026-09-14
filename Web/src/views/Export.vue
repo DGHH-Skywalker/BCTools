@@ -41,9 +41,7 @@
       />
     </n-space>
 
-    <ExportAdvancedDrawer v-model:show="showAdvancedDrawer" :drawer-width="drawerWidth" />
-
-    <SettingsFab @click="showAdvancedDrawer = true">
+    <SettingsFab @click="router.push('/settings/export')">
       <template #icon>
         <Setting theme="outline" :size="22" :strokeWidth="3" />
       </template>
@@ -52,8 +50,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed, h, nextTick } from "vue"
+import { ref, watch, onMounted, computed, h, nextTick } from "vue"
 import { useI18n } from "../i18n"
+import { useRouter } from "vue-router"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
 import { useExportStore } from "../stores/export"
@@ -61,7 +60,6 @@ import { useExportImage } from "../composables/useExportImage"
 import WeekTransferPanel from "../components/export/WeekTransferPanel.vue"
 import YearSelect from "../components/common/YearSelect.vue"
 import ExportActions from "../components/export/ExportActions.vue"
-import ExportAdvancedDrawer from "../components/export/ExportAdvancedDrawer.vue"
 import { dayjs } from "../utils/datetime"
 import { useMessage } from "naive-ui"
 import type { SongType } from "../api/types"
@@ -83,7 +81,7 @@ const message = useMessage()
 const { generateImage, getExportWeek } = useExportImage()
 const selectedYear = ref(dayjs().year())
 const exporting = ref(false)
-const showAdvancedDrawer = ref(false)
+const router = useRouter()
 
 function canExport(type: SongType) {
   if (exportStore.selectedDates.length === 0) return false
@@ -91,20 +89,9 @@ function canExport(type: SongType) {
   return !!exportStore.backgroundImageFor(type)
 }
 
-const drawerWidth = ref(window.innerWidth <= 768 ? "100%" : "50%")
-function updateDrawerWidth() {
-  drawerWidth.value = window.innerWidth <= 768 ? "100%" : "50%"
-}
-
 onMounted(async () => {
   await Promise.all([songsStore.fetchSongs("dorm"), songsStore.fetchSongs("broadcast"), settingsStore.fetchSettings()])
-  updateDrawerWidth()
-  window.addEventListener("resize", updateDrawerWidth)
   scrollToCurrentWeek()
-})
-
-onUnmounted(() => {
-  window.removeEventListener("resize", updateDrawerWidth)
 })
 
 function dayIndexFromDate(dateStr: string): number {

@@ -44,6 +44,34 @@ func (s *SettingsUpdateService) CheckTimeSlotDeletion(req models.UpdateSettingsR
 	return len(affected)
 }
 
+// ReconcileTimeSlots preserves an existing slot identity whenever a submitted
+// slot still represents the same day and position. This protects assignments
+// when a UI recreates a row while editing a time or copying a day configuration.
+func (s *SettingsUpdateService) ReconcileTimeSlots(req *models.UpdateSettingsRequest) {
+	if req.TimeSlots == nil {
+		return
+	}
+	oldSlots := s.Settings.GetTimeSlots()
+	used := make(map[string]bool)
+	known := make(map[string]bool, len(oldSlots))
+	byPosition := make(map[string]string, len(oldSlots))
+	for _, slot := range oldSlots {
+		known[slot.ID] = true
+		byPosition[slotPosition(slot)] = slot.ID
+	}
+	for i := range *req.TimeSlots {
+		slot := &(*req.TimeSlots)[i]
+		if known[slot.ID] && !used[slot.ID] {
+			used[slot.ID] = true
+			continue
+		}
+		if id := byPosition[slotPosition(*slot)]; id != "" && !used[id] {
+			slot.ID = id
+			used[id] = true
+		}
+	}
+}
+
 // ApplyTimeSlotDeletion unassigns songs from deleted time slots and logs them.
 func (s *SettingsUpdateService) ApplyTimeSlotDeletion(req models.UpdateSettingsRequest) error {
 	if req.TimeSlots == nil || !req.Confirmed {
@@ -114,4 +142,8 @@ func deletedSlotIDs(oldSlots, newSlots []models.TimeSlot) map[string]bool {
 		}
 	}
 	return deleted
+}
+
+func slotPosition(slot models.TimeSlot) string {
+	return fmt.Sprintf("%d:%d", slot.DayIndex, slot.Order)
 }

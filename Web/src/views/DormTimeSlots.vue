@@ -1,12 +1,6 @@
 <template>
   <div class="dorm-timeslots">
-    <n-space align="center" style="margin-bottom:16px;">
-      <n-button size="small" @click="router.push('/dorm/manage')">
-        <template #icon><Left theme="outline" :size="14" :strokeWidth="3" /></template>
-        {{ t("timeSlots.back") }}
-      </n-button>
-      <n-h2 style="margin:0;">{{ t("settings.advancedSettings") }}</n-h2>
-    </n-space>
+    <n-space align="center" style="margin-bottom:16px;"><n-h2 style="margin:0;">宿舍时段与查重</n-h2></n-space>
 
     <n-space vertical size="large" style="width:100%;">
       <n-card size="small" :title="t('timeSlots.duplicateCheckSettings')">
@@ -97,16 +91,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue"
-import { useRouter } from "vue-router"
 import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
 import type { TimeSlot } from "../api/types"
 import { useMessage } from "naive-ui"
 import draggable from "vuedraggable"
-import { Delete, Left } from "@icon-park/vue-next"
+import { Delete } from "@icon-park/vue-next"
 
 const { t, weekdayLabel } = useI18n()
-const router = useRouter()
 const settingsStore = useSettingsStore()
 const message = useMessage()
 
@@ -196,7 +188,6 @@ async function doSave(confirmed: boolean) {
       return
     }
     message.success(t("common.save"))
-    router.push("/dorm/manage")
   } catch (err: any) {
     message.error(err?.message || "保存失败")
   } finally {

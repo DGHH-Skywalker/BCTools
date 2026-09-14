@@ -1,6 +1,5 @@
 import { ExtLink } from '~/components/ExtLink';
 import { HiWord } from '~/components/HelpText/HiWord';
-import NoopExecutable from './assets/noop.exe?base64';
 import NoopExecutableSource from './assets/noop.asm.txt?base64';
 
 const PC_CLIENT_URL = 'https://web.archive.org/web/2023/https://dldir1v6.qq.com/music/clntupate/QQMusic_Setup_1951.exe';
@@ -39,14 +38,8 @@ export function InstructionsPC() {
 
       <p className="mt-4">
         安装完成后可以覆盖 QQ 音乐安装目录下的
-        <a
-          className="link link-info mx-1"
-          download="QQMusicUp.exe"
-          href={`data:application/vnd.microsoft.portable-executable;base64,${NoopExecutable}`}
-        >
-          <code>QQMusicUp.exe</code>
-        </a>
-        同名文件，屏蔽自动更新（
+        <code className="mx-1">QQMusicUp.exe</code>
+        同名文件，屏蔽自动更新；可下载其参考源码（
         <a
           className="link"
           download="QQMusicUp.asm"

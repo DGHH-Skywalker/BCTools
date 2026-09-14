@@ -16,7 +16,7 @@
 
     <DormGrid :week-dates="weekDates" @open-import="onOpenImport" />
 
-    <SettingsFab style="bottom:24px;right:24px;" @click="router.push('/dorm/manage/slots')">
+    <SettingsFab style="bottom:24px;right:24px;" @click="router.push('/settings/slots')">
       <template #icon>
         <Time theme="outline" :size="22" :strokeWidth="3" />
       </template>
