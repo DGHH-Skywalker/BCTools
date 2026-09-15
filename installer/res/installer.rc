@@ -16,4 +16,3 @@ IDR_FONT_FANGZHENG RCDATA "font_fangzheng_yansong.ttf"
 
 // Application binaries (copied by build script)
 IDR_BCTOOLS_EXE     RCDATA "bctools.exe"
-IDR_BCTOOL_DEV_EXE  RCDATA "bctool_dev.exe"
