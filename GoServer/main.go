@@ -193,6 +193,10 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 	settingsStore := settingstore.New(repo)
 	snapshotStore := snapshotstore.New(repo, logger)
 	deletedLogStore := deletedlogstore.New(appDataDir)
+	updateLogService, err := services.NewUpdateLogService(appDataDir)
+	if err != nil {
+		log.Fatalf("Failed to init embedded update log: %v", err)
+	}
 
 	// 5. Init converter (ffmpeg/ffprobe)
 	binDir := paths.GetBinDir(appDataDir)
@@ -247,15 +251,16 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 	})
 
 	routes.RegisterRoutes(r, routes.HandlerSet{
-		Songs:    handlers.NewSongHandler(songStore, snapshotStore, library),
-		Files:    handlers.NewFileHandler(appDataDir, conv, library),
-		Auth:     handlers.NewAuthHandler(settingsStore),
-		Settings: handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore, library),
-		Snapshot: handlers.NewSnapshotHandler(snapshotStore),
-		Update:   handlers.NewUpdateHandler(settingsStore),
-		Network:  handlers.NewNetworkHandler(port),
-		System:   handlers.NewSystemHandler(appDataDir, version.Version),
-		Decrypt:  handlers.NewDecryptHandler(appDataDir, conv),
+		Songs:     handlers.NewSongHandler(songStore, snapshotStore, library),
+		Files:     handlers.NewFileHandler(appDataDir, conv, library),
+		Auth:      handlers.NewAuthHandler(settingsStore),
+		Settings:  handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore, library),
+		Snapshot:  handlers.NewSnapshotHandler(snapshotStore),
+		Update:    handlers.NewUpdateHandler(settingsStore),
+		UpdateLog: handlers.NewUpdateLogHandler(updateLogService),
+		Network:   handlers.NewNetworkHandler(port),
+		System:    handlers.NewSystemHandler(appDataDir, version.Version),
+		Decrypt:   handlers.NewDecryptHandler(appDataDir, conv),
 		Lifecycle: lifecycle,
 	})
 

@@ -1,22 +1,5 @@
 <template>
-  <n-drawer
-    :show="show"
-    placement="right"
-    :width="drawerWidth"
-    :native-scrollbar="false"
-    resizable
-    @update:show="$emit('update:show', $event)"
-  >
-    <n-scrollbar class="drawer-scrollbar">
-      <n-space align="center" justify="space-between" class="drawer-header">
-        <n-text strong class="drawer-title">{{ t('export.advancedSettings') }}</n-text>
-        <n-button text circle @click="$emit('update:show', false)">
-          <template #icon>
-            <Close theme="outline" :size="20" :strokeWidth="3" />
-          </template>
-        </n-button>
-      </n-space>
-      <n-space vertical size="large" class="drawer-body">
+  <n-space vertical size="large" class="preferences-panel">
         <n-space align="center" wrap class="drawer-row">
           <n-text strong>{{ t("export.mode") }}</n-text>
           <n-switch v-model:value="exportStore.simpleMode" :rail-style="switchRailStyle">
@@ -97,9 +80,7 @@
             </n-space>
           </n-space>
         </template>
-      </n-space>
-    </n-scrollbar>
-  </n-drawer>
+  </n-space>
 </template>
 
 <script setup lang="ts">
@@ -111,16 +92,6 @@ import { useMessage } from "naive-ui"
 import type { UploadFileInfo } from "naive-ui"
 import type { SongType } from "../../api/types"
 import { COLORS } from "../../constants/colors"
-import { Close } from "@icon-park/vue-next"
-
-const props = defineProps<{
-  show: boolean
-  drawerWidth: string
-}>()
-
-defineEmits<{
-  (e: "update:show", value: boolean): void
-}>()
 
 const { t } = useI18n()
 const exportStore = useExportStore()
@@ -175,20 +146,9 @@ function onBackgroundUploadChange({ fileList }: { fileList: UploadFileInfo[] }, 
 </style>
 
 <style scoped>
-.drawer-scrollbar {
-  height: 100%;
-}
-
-.drawer-header {
-  padding: var(--spacing-md) var(--spacing-md) 0;
-}
-
-.drawer-title {
-  font-size: var(--spacing-md);
-}
-
-.drawer-body {
-  padding: var(--spacing-md);
+.preferences-panel {
+  width: 100%;
+  max-width: 900px;
 }
 
 .drawer-row {

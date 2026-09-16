@@ -1,8 +1,8 @@
 {
   "name": "bctools",
-  "version": "5.7.0.0",
+  "version": "5.8.0.0",
   "private": true,
-  "description": "小播点歌工具 — Vue、um-react、Go 与安装程序的一体化构建入口。",
+  "description": "小播点歌工具 — Vue、um-react、Go 与 Inno Setup 的一体化构建入口。",
   "type": "module",
   "scripts": {
     "predev": "node scripts/ensure-root-deps.cjs",
@@ -17,9 +17,10 @@
     "build:um-react": "node scripts/build-um-react.cjs",
     "build:copy": "node scripts/copy-embed.cjs",
     "build:inject-ffmpeg": "node scripts/inject-ffmpeg.cjs",
-    "build:server": "go -C GoServer build -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
+    "build:server": "npm run build:versioninfo && go -C GoServer build -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
+    "build:versioninfo": "go -C GoServer run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.7.0 -o resource.syso versioninfo.json",
     "build:installer": "node scripts/build-installer.cjs",
-    "build:server-only": "go -C GoServer build -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
+    "build:server-only": "npm run build:server",
     "build:clean": "node scripts/clean-all.cjs",
     "test": "npm --prefix Web run test && go -C GoServer test ./...",
     "type-check": "npm --prefix Web run type-check && go -C GoServer vet ./...",

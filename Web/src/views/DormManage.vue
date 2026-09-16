@@ -16,7 +16,7 @@
 
     <DormGrid :week-dates="weekDates" @open-import="onOpenImport" />
 
-    <SettingsFab style="bottom:24px;right:24px;" @click="router.push('/settings/slots')">
+    <SettingsFab style="bottom:24px;right:24px;" @click="openSettingsWindow('/settings/slots')">
       <template #icon>
         <Time theme="outline" :size="22" :strokeWidth="3" />
       </template>
@@ -55,6 +55,7 @@ import SongImportPanel from "../components/dorm/SongImportPanel.vue"
 import SettingsFab from "../components/ui/SettingsFab.vue"
 import { Left, Right, Time } from "@icon-park/vue-next"
 import { dayjs } from "../utils/datetime"
+import { openSettingsWindow } from "../utils/settingsWindow"
 
 
 const { t } = useI18n()

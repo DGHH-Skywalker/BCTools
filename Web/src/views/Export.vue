@@ -41,7 +41,7 @@
       />
     </n-space>
 
-    <SettingsFab @click="router.push('/settings/export')">
+    <SettingsFab @click="openSettingsWindow('/settings/export')">
       <template #icon>
         <Setting theme="outline" :size="22" :strokeWidth="3" />
       </template>
@@ -52,7 +52,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed, h, nextTick } from "vue"
 import { useI18n } from "../i18n"
-import { useRouter } from "vue-router"
 import { useSongsStore } from "../stores/songs"
 import { useSettingsStore } from "../stores/settings"
 import { useExportStore } from "../stores/export"
@@ -66,6 +65,7 @@ import type { SongType } from "../api/types"
 import type { TransferRenderSourceList } from "naive-ui"
 import { Setting } from "@icon-park/vue-next"
 import SettingsFab from "../components/ui/SettingsFab.vue"
+import { openSettingsWindow } from "../utils/settingsWindow"
 
 
 interface DayOption {
@@ -81,7 +81,6 @@ const message = useMessage()
 const { generateImage, getExportWeek } = useExportImage()
 const selectedYear = ref(dayjs().year())
 const exporting = ref(false)
-const router = useRouter()
 
 function canExport(type: SongType) {
   if (exportStore.selectedDates.length === 0) return false

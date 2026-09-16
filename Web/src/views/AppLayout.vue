@@ -57,6 +57,7 @@ import { useAppConfig } from "../composables/useAppConfig"
 import { useAudioPlayer } from "../composables/useAudioPlayer"
 import type { MenuOption } from "naive-ui"
 import { Clipboard, Broadcast, Export, FolderOpen, Setting, HamburgerButton, Music, Phone, Key } from "@icon-park/vue-next"
+import { openSettingsWindow } from "../utils/settingsWindow"
 
 const router = useRouter(); const route = useRoute()
 const { t, setLocale, currentLocale } = useI18n()
@@ -91,12 +92,20 @@ function onMenuChange(key: string) {
     window.open("/um-react/", "_blank")
     return
   }
+  if (key === "/settings") {
+    openSettingsWindow()
+    return
+  }
   router.push(key)
 }
 function onMobileMenuChange(key: string) {
   mobileMenuOpen.value = false
   if (key === "um-react") {
     window.open("/um-react/", "_blank")
+    return
+  }
+  if (key === "/settings") {
+    openSettingsWindow()
     return
   }
   router.push(key)

@@ -4,6 +4,7 @@
       <n-dialog-provider>
         <n-notification-provider>
           <router-view />
+          <UpdateLogNotice />
           <AudioPlayerWidget v-show="!isHome" />
           <AppHeartbeat />
         </n-notification-provider>
@@ -21,6 +22,7 @@ import { loadAppConfig, useAppConfig } from "./composables/useAppConfig"
 import { useTheme } from "./composables/useTheme"
 import AudioPlayerWidget from "./components/common/AudioPlayerWidget.vue"
 import AppHeartbeat from "./components/common/AppHeartbeat.vue"
+import UpdateLogNotice from "./components/common/UpdateLogNotice.vue"
 
 const { config } = useAppConfig()
 const route = useRoute()

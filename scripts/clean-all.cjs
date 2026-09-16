@@ -9,6 +9,7 @@ const targets = [
   "GoServer/embed/dist",
   "GoServer/embed/um-react",
   "GoServer/internal/binembed/bin",
+  "GoServer/resource.syso",
   "dist",
   "installer/obj",
   "installer/setup.exe",

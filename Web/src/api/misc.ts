@@ -3,7 +3,7 @@
 //
 // 领域较重的 API 仍各自独立成文件（songs / files / decrypt）。
 import apiClient from "./client"
-import type { NetworkInfo, Settings } from "./types"
+import type { NetworkInfo, Settings, UpdateLog } from "./types"
 
 // ---------- 设置 ----------
 
@@ -36,5 +36,12 @@ export interface SystemStatus {
 
 export async function getSystemStatus(): Promise<SystemStatus> {
   const { data } = await apiClient.get<SystemStatus>("/system/status")
+  return data
+}
+
+// ---------- 可信更新日志 ----------
+
+export async function getLatestUpdateLog(): Promise<UpdateLog> {
+  const { data } = await apiClient.get<UpdateLog>("/update-log/latest")
   return data
 }

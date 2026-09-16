@@ -137,18 +137,9 @@ jobs:
             package-lock.json
             Web/package-lock.json
 
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-toolchain
-            make
-
-      - name: Add MinGW-w64 to PATH
+      - name: Install Inno Setup
         shell: pwsh
-        run: |
-          'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        run: choco install innosetup --no-progress --yes
 
       - name: Use the pinned pnpm version
         run: corepack install --global pnpm@${{ env.PNPM_VERSION }}

@@ -1,12 +1,6 @@
 <template>
   <div style="padding:24px;max-width:860px;margin:0 auto;">
-    <n-space align="center" style="margin-bottom:16px;">
-      <n-button size="small" @click="goBack">
-        <template #icon><Left theme="outline" :size="14" :strokeWidth="3" /></template>
-        {{ t("guide.back") }}
-      </n-button>
-      <n-h2 style="margin:0;color:var(--theme-color);">{{ t("guide.title") }}</n-h2>
-    </n-space>
+    <n-h2 style="margin:0 0 16px;color:var(--theme-color);">{{ t("guide.title") }}</n-h2>
 
     <n-card>
       <n-collapse :default-expanded-names="['import']" arrow-placement="left">
@@ -65,14 +59,6 @@
 
 <script setup lang="ts">
 import { useI18n } from "../i18n"
-import { useRouter } from "vue-router"
-import { Left } from "@icon-park/vue-next"
 
 const { t } = useI18n()
-const router = useRouter()
-
-function goBack() {
-  if (window.history.length > 1) router.back()
-  else router.push("/settings")
-}
 </script>

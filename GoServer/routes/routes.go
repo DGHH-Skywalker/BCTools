@@ -13,6 +13,7 @@ type HandlerSet struct {
 	Settings  *handlers.SettingsHandler
 	Snapshot  *handlers.SnapshotHandler
 	Update    *handlers.UpdateHandler
+	UpdateLog *handlers.UpdateLogHandler
 	Network   *handlers.NetworkHandler
 	System    *handlers.SystemHandler
 	Decrypt   *handlers.DecryptHandler
@@ -60,6 +61,7 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 			r.Post("/restore", hs.Snapshot.HandleRestore)
 		})
 		r.Get("/check-update", hs.Update.HandleCheck)
+		r.Get("/update-log/latest", hs.UpdateLog.HandleLatest)
 		r.Get("/system/status", hs.System.HandleStatus)
 		r.Route("/network", func(r chi.Router) {
 			r.Get("/info", hs.Network.HandleGetInfo)

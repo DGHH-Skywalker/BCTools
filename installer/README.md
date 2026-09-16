@@ -1,80 +1,51 @@
-# 小播点歌工具安装程序
+# BCTools Inno Setup installer
 
-原生 C++ Win32/GDI+ 安装/卸载程序，无 Web/Electron/.NET 依赖。
+The default installer is defined in `BCTools.iss`. The former C++/Win32 source
+under `src/` and its `Makefile` are retained temporarily for comparison, but are
+not used by the root build or CI.
 
-## 构建依赖
+## Layout and data
 
-- MinGW-w64（包含 `g++` 与 `windres`）
-- GNU Make
+- Application: `%LOCALAPPDATA%\Programs\BCTools\bctools.exe` by default.
+- User data: `<install directory>\BctoolData`.
+- The Go executable embeds both web frontends and ffmpeg/ffprobe. At runtime it
+  extracts the media tools under `BctoolData\bin`.
 
-## 资源准备
+Inno Setup owns only application files and shortcuts. It does not register
+`BctoolData` as an installed file, so upgrades and ordinary uninstalls preserve
+the directory. Interactive uninstall asks whether to remove it. Silent uninstall
+preserves it unless `/REMOVEUSERDATA` is supplied explicitly.
 
-`npm run build:installer` 在构建安装程序前会自动把以下资源复制到 `installer/res/`：
+## Installation modes
 
-- `GoServer/assets/icon-bc.ico` → `res/icon-bc.ico`
-- `Web/public/logo.png` → `res/logo.png`
-- `Web/dist/fonts/江西拙楷3.0.ttf` → `res/font_jiangxi_zhuokai.ttf`（构建时按用字精简后的字体）
-- `Web/dist/fonts/方正颜宋简体.ttf` → `res/font_fangzheng_yansong.ttf`（构建时按用字精简后的字体）
-- `dist/bctools.exe` → `res/bctools.exe`
+The stable Inno Setup `AppId` is the installation identity. When it is absent,
+Setup performs a fresh install. When it exists, Setup reuses the recorded path
+and performs an upgrade or reinstall; running the same package is the supported
+repair/reinstall flow. Stable Desktop and Start Menu shortcut names are replaced
+in place, preventing duplicates.
 
-手动准备时：
+Before files are replaced, Setup checks for `bctools.exe` and calls the existing
+`POST http://127.0.0.1:1743/api/shutdown` endpoint. If the process does not exit,
+interactive setup asks the user to close it and silent setup aborts without
+replacing files.
 
-```bash
-cd installer
-cp ../GoServer/assets/icon-bc.ico           res/icon-bc.ico
-cp ../Web/public/logo.png                   res/logo.png
-cp "../Web/dist/fonts/江西拙楷3.0.ttf"      res/font_jiangxi_zhuokai.ttf
-cp "../Web/dist/fonts/方正颜宋简体.ttf"     res/font_fangzheng_yansong.ttf
-cp ../dist/bctools.exe                      res/bctools.exe
+## Build
+
+Install Inno Setup 6 and either use its default install path or set `ISCC_PATH`:
+
+```powershell
+npm run build
 ```
 
-## 编译
+The result is `dist\BCTools-Setup.exe`.
 
-```bash
-cd installer
-make
+## Silent commands
+
+```powershell
+BCTools-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+"%LOCALAPPDATA%\Programs\BCTools\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+"%LOCALAPPDATA%\Programs\BCTools\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /REMOVEUSERDATA
 ```
 
-产物为 `installer/setup.exe`。
-
-## 运行
-
-- 安装模式：双击 `setup.exe`
-- 卸载模式：`setup.exe /uninstall`
-
-## 页面流程
-
-### 安装模式
-
-1. **WelcomePage**：设计稿首页，左侧 Logo、右侧标题「小播点歌工具」与蓝色圆角安装按钮。
-2. **PathPage**：选择安装目录，默认管理员模式 `C:\Program Files\BCTools`，用户模式 `%LOCALAPPDATA%\Programs\BCTools`。
-3. **ProgressPage**：释放文件、创建快捷方式、写入卸载注册表。
-4. **FinishPage**：完成，可选立即运行。
-
-### 卸载模式
-
-1. **UninstallConfirmPage**：确认卸载并提示删除数据。
-2. **UninstallProgressPage**：
-   - 结束 `bctools.exe` / `bctool_dev.exe`。
-   - 查找并结束占用端口 `1743` 的进程。
-   - 删除安装目录、`%APPDATA%\BroadcastTool\`。
-   - 删除注册表启动项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\BroadcastTool`。
-   - 删除桌面与开始菜单快捷方式，刷新桌面。
-3. **UninstallFinishPage**：完成。
-
-## 权限处理
-
-- 安装程序 manifest 使用 `asInvoker`。
-- 若用户选择 `C:\Program Files\BCTools` 且当前非管理员，会尝试以 `runas` 提权重启；用户取消则回退到用户级目录。
-- 卸载程序需要管理员权限以删除系统范围注册表项。
-
-## 响应式与高 DPI
-
-- 窗口基准尺寸 960×640。
-- 支持 100%/125%/150%/200% DPI 缩放，所有 UI 坐标按 DPI 因子缩放。
-- 字体与 Logo 从资源嵌入并运行时加载。
-
-## 已知 TODO
-
-- 卸载时若安装目录无法立即删除（自身占用），使用 `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` 延迟删除，需重启生效。
-- 字体族名硬编码为文件已知名称，若字体文件变更需同步更新 `ResourceManager.cpp`。
+Use `/DIR="D:\Path With Spaces\BCTools"` to choose an install directory during
+silent installation. Inno Setup uses Unicode paths and supports Windows 10/11.

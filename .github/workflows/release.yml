@@ -68,10 +68,9 @@ jobs:
         working-directory: GoServer/ffmpeg_bctools_mini
         run: bash build.sh
 
-      - name: Add MinGW-w64 to PATH
+      - name: Install Inno Setup
         shell: pwsh
-        run: |
-          'C:\msys64\ucrt64\bin' | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        run: choco install innosetup --no-progress --yes
 
       - name: Use the pinned pnpm version
         run: corepack install --global pnpm@${{ env.PNPM_VERSION }}

@@ -87,6 +87,19 @@ export interface UpdateCheckResult {
   downloadUrl?: string
 }
 
+export interface UpdateLog {
+  schemaVersion: number
+  id: string
+  version: string
+  publishedAt: string
+  expiresAt: string
+  title: string
+  content: string[]
+  downloadUrl?: string
+  recent: boolean
+  startupId: string
+}
+
 export interface SnapshotInfo {
   filename: string
   time: string
