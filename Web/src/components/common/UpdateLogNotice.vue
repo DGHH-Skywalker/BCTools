@@ -19,9 +19,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
-import { getLatestUpdateLog } from "../../api/misc"
+import { claimLatestUpdateLog } from "../../api/misc"
 import type { UpdateLog } from "../../api/types"
-import { claimUpdateLog } from "../../utils/updateLog"
 
 const latest = ref<UpdateLog | null>(null)
 const show = ref(false)
@@ -29,8 +28,8 @@ const publishedDate = computed(() => latest.value ? new Date(latest.value.publis
 
 onMounted(async () => {
   try {
-    const log = await getLatestUpdateLog()
-    if (!claimUpdateLog(log)) return
+    const log = await claimLatestUpdateLog()
+    if (!log.shouldShow) return
     latest.value = log
     show.value = true
   } catch {

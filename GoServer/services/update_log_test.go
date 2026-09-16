@@ -87,6 +87,38 @@ func TestUpdateLogExpiredFallsBack(t *testing.T) {
 	}
 }
 
+func TestUpdateLogOlderThanEmbeddedFallsBack(t *testing.T) {
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	raw := []byte(`{"schemaVersion":1,"id":"old-update","version":"5.7.0.0","publishedAt":"2026-09-10T00:00:00Z","expiresAt":"2026-10-01T00:00:00Z","title":"Old update","content":["Item one"]}`)
+	sig := []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, raw)))
+	service := newTestUpdateLogService(t, raw, sig, publicKey)
+	if service.Latest().Version != "5.8.0.0" {
+		t.Fatal("older signed data replaced the embedded update log")
+	}
+}
+
+func TestUpdateLogLifetimeTooLongFallsBack(t *testing.T) {
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	raw := testUpdateLogJSON("2026-09-10T00:00:00Z", "2027-09-10T00:00:00Z")
+	sig := []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, raw)))
+	service := newTestUpdateLogService(t, raw, sig, publicKey)
+	if service.Latest().PublishedAt != "2026-09-01T00:00:00Z" {
+		t.Fatal("overlong external update log did not fall back")
+	}
+}
+
+func TestUpdateLogClaimedOncePerStartup(t *testing.T) {
+	publicKey, _, _ := ed25519.GenerateKey(rand.Reader)
+	service := newTestUpdateLogService(t, nil, nil, publicKey)
+	service.now = func() time.Time { return time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC) }
+	if !service.ClaimLatest().ShouldShow {
+		t.Fatal("first client should claim a recent update")
+	}
+	if service.ClaimLatest().ShouldShow {
+		t.Fatal("second client must not claim the same startup update")
+	}
+}
+
 func TestPublishedWithinFourteenDays(t *testing.T) {
 	if !PublishedWithin("2026-09-01T12:00:00Z", updateLogTestNow, 14*24*time.Hour) {
 		t.Fatal("14-day boundary should be visible")

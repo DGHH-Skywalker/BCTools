@@ -47,7 +47,7 @@ chinesesimplified.PrivilegesRequiredOverrideText2=%1 可以只为当前用户安
 
 [Files]
 ; The Go executable already embeds the Vue/React frontends and ffmpeg tools.
-Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 
 [InstallDelete]
 ; Clean only legacy application helpers. BctoolData is deliberately excluded.
@@ -83,11 +83,14 @@ begin
   // migrate installations made by the former C++ installer into the same path.
   if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\BCTools',
     'InstallLocation', LegacyDir) or
-    RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\BCTools',
-    'InstallLocation', LegacyDir) then
+    (IsAdminInstallMode and
+      RegQueryStringValue(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\BCTools',
+        'InstallLocation', LegacyDir)) then
     Result := LegacyDir
   else
-    Result := ExpandConstant('{localappdata}\Programs\BCTools');
+    // {autopf} resolves to Program Files for all-users mode and to the current
+    // user's Programs directory for non-administrative mode.
+    Result := ExpandConstant('{autopf}\BCTools');
 end;
 
 function HasSwitch(const Value: String): Boolean;

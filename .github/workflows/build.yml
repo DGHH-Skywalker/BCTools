@@ -53,17 +53,11 @@ jobs:
       - name: Install React dependencies
         run: corepack pnpm --dir Web/um-react install --frozen-lockfile
 
-      - name: Go vet
-        run: go -C GoServer vet -mod=readonly ./...
+      - name: Type checks and Go vet
+        run: npm run type-check
 
-      - name: Go tests
-        run: go -C GoServer test -mod=readonly ./...
-
-      - name: Vue type check
-        run: npm --prefix Web run type-check
-
-      - name: Vue tests
-        run: npm --prefix Web run test
+      - name: Frontend and Go tests
+        run: npm run test
 
       - name: React type check
         run: corepack pnpm --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
@@ -161,6 +155,10 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Smoke-test silent install and uninstall
+        shell: pwsh
+        run: ./scripts/test-installer.ps1
 
       - name: List artifacts
         shell: bash

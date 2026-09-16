@@ -19,3 +19,8 @@ func (h *UpdateLogHandler) HandleLatest(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Cache-Control", "no-store")
 	response.WriteJSON(w, http.StatusOK, h.service.Latest())
 }
+
+func (h *UpdateLogHandler) HandleClaim(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	response.WriteJSON(w, http.StatusOK, h.service.ClaimLatest())
+}

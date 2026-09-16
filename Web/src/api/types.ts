@@ -97,6 +97,7 @@ export interface UpdateLog {
   content: string[]
   downloadUrl?: string
   recent: boolean
+  shouldShow: boolean
   startupId: string
 }
 

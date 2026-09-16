@@ -45,3 +45,8 @@ export async function getLatestUpdateLog(): Promise<UpdateLog> {
   const { data } = await apiClient.get<UpdateLog>("/update-log/latest")
   return data
 }
+
+export async function claimLatestUpdateLog(): Promise<UpdateLog> {
+  const { data } = await apiClient.post<UpdateLog>("/update-log/claim")
+  return data
+}

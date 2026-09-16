@@ -6,7 +6,8 @@ not used by the root build or CI.
 
 ## Layout and data
 
-- Application: `%LOCALAPPDATA%\Programs\BCTools\bctools.exe` by default.
+- Current-user application: `%LOCALAPPDATA%\Programs\BCTools\bctools.exe`.
+- All-users application: `%ProgramFiles%\BCTools\bctools.exe`.
 - User data: `<install directory>\BctoolData`.
 - The Go executable embeds both web frontends and ffmpeg/ffprobe. At runtime it
   extracts the media tools under `BctoolData\bin`.
@@ -42,10 +43,12 @@ The result is `dist\BCTools-Setup.exe`.
 ## Silent commands
 
 ```powershell
-BCTools-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-"%LOCALAPPDATA%\Programs\BCTools\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-"%LOCALAPPDATA%\Programs\BCTools\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /REMOVEUSERDATA
+& .\BCTools-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER
+& "$env:LOCALAPPDATA\Programs\BCTools\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+& "$env:LOCALAPPDATA\Programs\BCTools\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /REMOVEUSERDATA
 ```
 
 Use `/DIR="D:\Path With Spaces\BCTools"` to choose an install directory during
-silent installation. Inno Setup uses Unicode paths and supports Windows 10/11.
+silent installation. Use `/ALLUSERS` for a machine-wide installation and
+`/CURRENTUSER` for a per-user installation. Inno Setup uses Unicode paths and
+supports Windows 10/11.

@@ -62,6 +62,7 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 		})
 		r.Get("/check-update", hs.Update.HandleCheck)
 		r.Get("/update-log/latest", hs.UpdateLog.HandleLatest)
+		r.Post("/update-log/claim", hs.UpdateLog.HandleClaim)
 		r.Get("/system/status", hs.System.HandleStatus)
 		r.Route("/network", func(r chi.Router) {
 			r.Get("/info", hs.Network.HandleGetInfo)

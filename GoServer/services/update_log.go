@@ -14,7 +14,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,7 +26,8 @@ const (
 	updateLogSignatureName = "update-log.sig"
 	maxUpdateLogJSONSize   = 128 * 1024
 	maxUpdateLogSigSize    = 4 * 1024
-	updateLogPublicKeyB64  = "JJ0cKtM5/S31DGK9YC77DptfxCvPLpwZpQh6DfvpqfY="
+	maxExternalLogLifetime = 90 * 24 * time.Hour
+	updateLogPublicKeyB64  = "5DKvUcxBjlGeDvGuRoPNdSJRnkowOowLfjgAr/qhe/A="
 )
 
 //go:embed update_log_default.json
@@ -47,14 +50,17 @@ type UpdateLog struct {
 
 type UpdateLogResponse struct {
 	UpdateLog
-	Recent    bool   `json:"recent"`
-	StartupID string `json:"startupId"`
+	Recent     bool   `json:"recent"`
+	ShouldShow bool   `json:"shouldShow"`
+	StartupID  string `json:"startupId"`
 }
 
 type UpdateLogService struct {
 	latest    UpdateLog
 	now       func() time.Time
 	startupID string
+	claimMu   sync.Mutex
+	claimed   bool
 }
 
 func NewUpdateLogService(dataDir string) (*UpdateLogService, error) {
@@ -79,21 +85,34 @@ func newUpdateLogService(dataDir string, defaultJSON []byte, publicKey ed25519.P
 	}
 
 	external, err := verifyAndValidateUpdateLog(jsonBytes, signatureBytes, publicKey, now())
-	if err == nil {
+	if err == nil && !isOlderUpdateLog(external, fallback) {
 		service.latest = external
 	}
 	return service, nil
 }
 
 func readUpdateLogFile(path string, maxSize int64) ([]byte, error) {
-	info, err := os.Stat(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
 	if err != nil {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Size() > maxSize {
 		return nil, errors.New("invalid update-log file")
 	}
-	return os.ReadFile(path)
+	data, err := io.ReadAll(io.LimitReader(file, maxSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxSize {
+		return nil, errors.New("update-log file too large")
+	}
+	return data, nil
 }
 
 func (s *UpdateLogService) Latest() UpdateLogResponse {
@@ -102,6 +121,19 @@ func (s *UpdateLogService) Latest() UpdateLogResponse {
 		Recent:    PublishedWithin(s.latest.PublishedAt, s.now(), 14*24*time.Hour),
 		StartupID: s.startupID,
 	}
+}
+
+// ClaimLatest atomically grants the startup notice to at most one web client.
+func (s *UpdateLogService) ClaimLatest() UpdateLogResponse {
+	s.claimMu.Lock()
+	defer s.claimMu.Unlock()
+
+	response := s.Latest()
+	if response.Recent && !s.claimed {
+		s.claimed = true
+		response.ShouldShow = true
+	}
+	return response
 }
 
 func newUpdateLogStartupID(now time.Time) string {
@@ -165,6 +197,9 @@ func validateUpdateLog(rawJSON []byte, now time.Time, requireActive bool) (Updat
 	if requireActive && !expiresAt.After(now) {
 		return UpdateLog{}, errors.New("expired update log")
 	}
+	if requireActive && expiresAt.Sub(publishedAt) > maxExternalLogLifetime {
+		return UpdateLog{}, errors.New("update log lifetime is too long")
+	}
 	if title := strings.TrimSpace(log.Title); title == "" || len([]rune(title)) > 120 {
 		return UpdateLog{}, errors.New("invalid title")
 	}
@@ -183,6 +218,40 @@ func validateUpdateLog(rawJSON []byte, now time.Time, requireActive bool) (Updat
 		}
 	}
 	return log, nil
+}
+
+func isOlderUpdateLog(candidate, fallback UpdateLog) bool {
+	if compareVersions(candidate.Version, fallback.Version) < 0 {
+		return true
+	}
+	candidateTime, candidateErr := time.Parse(time.RFC3339, candidate.PublishedAt)
+	fallbackTime, fallbackErr := time.Parse(time.RFC3339, fallback.PublishedAt)
+	return candidateErr != nil || fallbackErr != nil || candidateTime.Before(fallbackTime)
+}
+
+func compareVersions(left, right string) int {
+	leftParts := strings.Split(left, ".")
+	rightParts := strings.Split(right, ".")
+	length := len(leftParts)
+	if len(rightParts) > length {
+		length = len(rightParts)
+	}
+	for index := 0; index < length; index++ {
+		leftValue, rightValue := 0, 0
+		if index < len(leftParts) {
+			leftValue, _ = strconv.Atoi(leftParts[index])
+		}
+		if index < len(rightParts) {
+			rightValue, _ = strconv.Atoi(rightParts[index])
+		}
+		if leftValue < rightValue {
+			return -1
+		}
+		if leftValue > rightValue {
+			return 1
+		}
+	}
+	return 0
 }
 
 func mustUpdateLogPublicKey() ed25519.PublicKey {

@@ -22,7 +22,9 @@
     "build:installer": "node scripts/build-installer.cjs",
     "build:server-only": "npm run build:server",
     "build:clean": "node scripts/clean-all.cjs",
+    "pretest": "node scripts/prepare-go-embed-stubs.cjs",
     "test": "npm --prefix Web run test && go -C GoServer test ./...",
+    "pretype-check": "node scripts/prepare-go-embed-stubs.cjs",
     "type-check": "npm --prefix Web run type-check && go -C GoServer vet ./...",
     "lint": "npm --prefix Web run lint",
     "prune:i18n": "node scripts/prune-i18n.cjs"

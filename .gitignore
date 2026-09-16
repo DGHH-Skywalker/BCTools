@@ -39,6 +39,8 @@ test-results/
 *.p12
 *.pfx
 *.kdbx
+*.seed
+.embed-stub
 
 # Python
 __pycache__/
