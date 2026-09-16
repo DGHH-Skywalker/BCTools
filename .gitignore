@@ -40,7 +40,7 @@ test-results/
 *.pfx
 *.kdbx
 *.seed
-.embed-stub
+embed-stub.txt
 
 # Python
 __pycache__/
