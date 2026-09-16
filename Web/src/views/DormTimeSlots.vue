@@ -1,6 +1,6 @@
 <template>
   <div class="dorm-timeslots">
-    <n-space align="center" style="margin-bottom:16px;"><n-h2 style="margin:0;">宿舍时段与查重</n-h2></n-space>
+    <n-space align="center" style="margin-bottom:16px;"><n-h2 style="margin:0;">时间配置</n-h2></n-space>
 
     <n-space vertical size="large" style="width:100%;">
       <n-card size="small" :title="t('timeSlots.duplicateCheckSettings')">

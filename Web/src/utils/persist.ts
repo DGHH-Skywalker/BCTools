@@ -68,3 +68,20 @@ export function writeJSON(spec: StorageSpec, value: unknown): void {
     // 循环引用等序列化失败，忽略。
   }
 }
+
+/** 写入新旧 key，供需要兼容旧版回退的配置使用。 */
+export function writeJSONWithLegacy(spec: StorageSpec, value: unknown): void {
+  try {
+    const serialized = JSON.stringify(value)
+    writeRaw(spec, serialized)
+    for (const old of spec.legacy) {
+      try {
+        localStorage.setItem(old, serialized)
+      } catch {
+        // 任一历史副本失败都不影响当前版本已保存的数据。
+      }
+    }
+  } catch {
+    // 循环引用等序列化失败，忽略。
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest"
-import { STORAGE_KEYS, readRaw, writeRaw, readJSON, writeJSON } from "@/utils/persist"
+import { STORAGE_KEYS, readRaw, writeRaw, readJSON, writeJSON, writeJSONWithLegacy } from "@/utils/persist"
 
 describe("persist storage with legacy key migration", () => {
   beforeEach(() => {
@@ -52,5 +52,12 @@ describe("persist storage with legacy key migration", () => {
     writeRaw(STORAGE_KEYS.locale, "en")
     expect(localStorage.getItem("bctools.locale")).toBe("en")
     expect(localStorage.getItem("locale")).toBeNull()
+  })
+
+  it("mirrors compatible settings to the legacy key for version rollback", () => {
+    const value = { backgroundImageDorm: "data:image/png;base64,test", backgroundImage: "data:image/png;base64,test" }
+    writeJSONWithLegacy(STORAGE_KEYS.exportAdvanced, value)
+    expect(readJSON<any>(STORAGE_KEYS.exportAdvanced)).toEqual(value)
+    expect(JSON.parse(localStorage.getItem("export-advanced-settings") || "null")).toEqual(value)
   })
 })

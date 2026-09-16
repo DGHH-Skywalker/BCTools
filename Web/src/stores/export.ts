@@ -1,11 +1,11 @@
 import { defineStore } from "pinia"
 import { ref, watch } from "vue"
 import type { SongType } from "../api/types"
-import { STORAGE_KEYS, readJSON, writeJSON } from "../utils/persist"
+import { STORAGE_KEYS, readJSON, writeJSONWithLegacy } from "../utils/persist"
 
 export type VacationBadge = "none" | "summer" | "winter"
 
-interface AdvancedSettings {
+export interface AdvancedSettings {
   vacationBadge: VacationBadge
   posterBlurDorm: number
   posterBlurBroadcast: number
@@ -24,24 +24,23 @@ function clampBlur(v: number): number {
   return Math.max(0, Math.min(50, Math.round(v)))
 }
 
-function loadAdvancedSettings(): AdvancedSettings {
-  const parsed = readJSON<any>(STORAGE_KEYS.exportAdvanced)
+export function normalizeAdvancedSettings(parsed: any): AdvancedSettings {
   if (parsed) {
-      // 兼容旧版本：旧的 backgroundImage 迁移到宿舍背景
-      const legacyBg = typeof parsed.backgroundImage === "string" ? parsed.backgroundImage : null
-      // 兼容旧版本：旧的 posterQuote 迁移到宿舍文案，旧的 posterBlur 迁移到宿舍模糊
-      const legacyQuote = typeof parsed.posterQuote === "string" && parsed.posterQuote.trim() ? parsed.posterQuote : DEFAULT_QUOTE
-      const legacyBlur = clampBlur(parsed.posterBlur)
-      return {
-        vacationBadge: ["none", "summer", "winter"].includes(parsed.vacationBadge) ? parsed.vacationBadge : "none",
-        posterBlurDorm: clampBlur(parsed.posterBlurDorm ?? legacyBlur),
-        posterBlurBroadcast: clampBlur(parsed.posterBlurBroadcast ?? legacyBlur),
-        posterQuoteDorm: typeof parsed.posterQuoteDorm === "string" && parsed.posterQuoteDorm.trim() ? parsed.posterQuoteDorm : legacyQuote,
-        posterQuoteBroadcast: typeof parsed.posterQuoteBroadcast === "string" && parsed.posterQuoteBroadcast.trim() ? parsed.posterQuoteBroadcast : legacyQuote,
-        simpleMode: typeof parsed.simpleMode === "boolean" ? parsed.simpleMode : false,
-        backgroundImageDorm: typeof parsed.backgroundImageDorm === "string" ? parsed.backgroundImageDorm : legacyBg,
-        backgroundImageBroadcast: typeof parsed.backgroundImageBroadcast === "string" ? parsed.backgroundImageBroadcast : null,
-      }
+    // 兼容旧版本：旧的 backgroundImage 迁移到宿舍背景
+    const legacyBg = typeof parsed.backgroundImage === "string" ? parsed.backgroundImage : null
+    // 兼容旧版本：旧的 posterQuote 迁移到宿舍文案，旧的 posterBlur 迁移到宿舍模糊
+    const legacyQuote = typeof parsed.posterQuote === "string" && parsed.posterQuote.trim() ? parsed.posterQuote : DEFAULT_QUOTE
+    const legacyBlur = clampBlur(parsed.posterBlur)
+    return {
+      vacationBadge: ["none", "summer", "winter"].includes(parsed.vacationBadge) ? parsed.vacationBadge : "none",
+      posterBlurDorm: clampBlur(parsed.posterBlurDorm ?? legacyBlur),
+      posterBlurBroadcast: clampBlur(parsed.posterBlurBroadcast ?? legacyBlur),
+      posterQuoteDorm: typeof parsed.posterQuoteDorm === "string" && parsed.posterQuoteDorm.trim() ? parsed.posterQuoteDorm : legacyQuote,
+      posterQuoteBroadcast: typeof parsed.posterQuoteBroadcast === "string" && parsed.posterQuoteBroadcast.trim() ? parsed.posterQuoteBroadcast : legacyQuote,
+      simpleMode: typeof parsed.simpleMode === "boolean" ? parsed.simpleMode : false,
+      backgroundImageDorm: typeof parsed.backgroundImageDorm === "string" ? parsed.backgroundImageDorm : legacyBg,
+      backgroundImageBroadcast: typeof parsed.backgroundImageBroadcast === "string" ? parsed.backgroundImageBroadcast : null,
+    }
   }
   return {
     vacationBadge: "none",
@@ -55,8 +54,22 @@ function loadAdvancedSettings(): AdvancedSettings {
   }
 }
 
+function loadAdvancedSettings(): AdvancedSettings {
+  return normalizeAdvancedSettings(readJSON<any>(STORAGE_KEYS.exportAdvanced))
+}
+
+export function compatibleAdvancedSettings(settings: AdvancedSettings) {
+  return {
+    ...settings,
+    // 旧版只识别这三个单值字段；同步保留宿舍歌单的对应设置。
+    backgroundImage: settings.backgroundImageDorm,
+    posterBlur: settings.posterBlurDorm,
+    posterQuote: settings.posterQuoteDorm,
+  }
+}
+
 function saveAdvancedSettings(settings: AdvancedSettings) {
-  writeJSON(STORAGE_KEYS.exportAdvanced, settings)
+  writeJSONWithLegacy(STORAGE_KEYS.exportAdvanced, compatibleAdvancedSettings(settings))
 }
 
 export const useExportStore = defineStore("export", () => {
