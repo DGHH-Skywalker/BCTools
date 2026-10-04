@@ -305,6 +305,8 @@ const exportStyles = `
   justify-content: center;
   gap: 4px;
   line-height: 1.3;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .circled-number {
@@ -315,8 +317,9 @@ const exportStyles = `
 
 .song-title {
   word-break: keep-all;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   line-break: strict;
+  min-width: 0;
 }
 `
 
@@ -508,7 +511,7 @@ export function useExportImage() {
       ? `<div class="ex-poster-bg" style="background-image:url(${bgImage});filter:blur(${blurPx}px) brightness(0.95);"></div>`
       : `<div class="ex-poster-bg ex-poster-bg-gradient" style="background:linear-gradient(135deg,${themeColor.value} 0%,#004d70 50%,#1a1a1a 100%);"></div>`
 
-    const tableHtml = type === "dorm" ? buildDormPosterTable(dates) : buildBroadcastPosterTableV2(dates)
+    const tableHtml = type === "dorm" ? buildDormPosterTable(dates) : buildBroadcastPosterTable(dates)
 
     const logoSrc = await loadImageBase64("/logo-white.png")
     const logoHtml = logoSrc
@@ -590,38 +593,6 @@ export function useExportImage() {
     return gridWrapperHtml(headerRow + dataRows, colCount, dates.length, true, type)
   }
 
-  function buildBroadcastPosterTable(dates: string[]): string {
-    const allSongs: Song[] = []
-    for (const date of dates) {
-      allSongs.push(...songsStore.broadcastSongs.filter((s) => s.date === date))
-    }
-    allSongs.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
-    const type: SongType = "broadcast"
-
-    const headers = ["", "歌名", "备注"]
-    const colCount = headers.length
-    const headerCells = headers
-      .map((h, i) => {
-        const fontRole = i === 0 ? "slot" : undefined
-        return cellHtml(h, true, i === 0, i, colCount, 0, fontRole, type)
-      })
-      .join("")
-    const headerRow = rowHtml(headerCells, true, 0)
-
-    const dataRows = allSongs
-      .map((s, rowIdx) => {
-        const cells = [
-          cellHtml(dateCellHtml(s.date), false, true, 0, colCount, rowIdx + 1, "slot", type),
-          cellHtml(formatExportTitle(displayTitle(s)), false, false, 1, colCount, rowIdx + 1, "title", type),
-          cellHtml(escapeHtml(s.remark), false, false, 2, colCount, rowIdx + 1, undefined, type),
-        ].join("")
-        return rowHtml(cells, false, rowIdx + 1)
-      })
-      .join("")
-
-    return gridWrapperHtml(headerRow + dataRows, colCount, allSongs.length, false, type)
-  }
-
   // 下午单元格首行的栏目标签：取当日 broadcastColumnMap 的栏目名，用白色江西拙楷、
   // 略大于歌名的字号，作为当天下午栏目的固定标识。
   function afternoonLabelHtml(date: string): string {
@@ -630,7 +601,7 @@ export function useExportImage() {
     return `<div class="ex-poster-afternoon-label">${escapeHtml(colName)}</div>`
   }
 
-  function buildBroadcastPosterTableV2(dates: string[]): string {
+  function buildBroadcastPosterTable(dates: string[]): string {
     // 广播歌单若按「每天一列」展示，一周有 7 天时每一列只剩约 110px，
     // 中文歌名会被逐字折行，继而把整张海报异常拉长。改为「每天一行、
     // 中午/下午两列」，无论选择多少天，歌名列都保有稳定的可读宽度。
