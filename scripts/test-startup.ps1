@@ -79,9 +79,12 @@ try {
   $copyDir = Join-Path $testRoot "Other Folder"
   New-Item -ItemType Directory -Path $copyDir -Force | Out-Null
   $copyExe = Join-Path $copyDir "bctools.exe"; Copy-Item $olderExe $copyExe
-  $started += Start-Process $olderExe -ArgumentList @("--no-browser", "--port", "$port") -PassThru
-  $started += Start-Process $copyExe -ArgumentList @("--no-browser", "--port", "$port") -PassThru
-  Start-Sleep -Seconds 2
+  $duplicates = @(
+    (Start-Process $olderExe -ArgumentList @("--no-browser", "--port", "$port") -PassThru),
+    (Start-Process $copyExe -ArgumentList @("--no-browser", "--port", "$port") -PassThru)
+  )
+  $started += $duplicates
+  foreach ($process in $duplicates) { Assert ($process.WaitForExit(15000)) "Duplicate launcher did not exit after reusing the running instance" }
   Assert ((Call-Api GET "/health").pid -eq $oldHealth.pid) "Duplicate launch replaced same-version instance"
   Assert (-not (Test-Path (Join-Path $copyDir "BctoolData"))) "EXE-relative data directory was recreated"
 
@@ -122,6 +125,13 @@ try {
   Assert ($null -eq (Get-Process -Id $runtimePID -ErrorAction SilentlyContinue)) "Safe shutdown did not terminate the process"
   $runtimePID = $null
   Write-Host "Windows startup, discovery, migration, single-instance and durable-handoff checks passed."
+}
+catch {
+  Write-Host "Startup test diagnostics:"
+  foreach ($file in @((Join-Path $env:LOCALAPPDATA "BCTools/installations.json"), (Join-Path $env:LOCALAPPDATA "BCTools/Data/runtime.json"), (Join-Path $env:LOCALAPPDATA "BCTools/Data/logs/app.log"))) {
+    if (Test-Path $file) { Write-Host $file; Get-Content $file -Tail 80 | Write-Host }
+  }
+  throw
 }
 finally {
   # Test-owned processes and directories only. Never enumerate/kill by image name.

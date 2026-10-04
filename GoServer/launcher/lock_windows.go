@@ -34,7 +34,12 @@ func AcquireLock(key string) (io.Closer, error) {
 		defer runtime.UnlockOSThread()
 		defer close(l.done)
 		h, err := windows.CreateMutex(nil, false, name)
-		if err != nil {
+		// CreateMutex returns a valid handle together with ERROR_ALREADY_EXISTS.
+		// Existing launchers must wait on that handle, rather than fail startup.
+		if err != nil && err != windows.ERROR_ALREADY_EXISTS {
+			if h != 0 {
+				windows.CloseHandle(h)
+			}
 			ready <- err
 			return
 		}
