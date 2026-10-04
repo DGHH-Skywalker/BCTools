@@ -36,6 +36,14 @@
   // stageId -> { btn, fileName, timer, attempts }
   var pending = {};
 
+  function backendFetch(url, options) {
+    return fetch('/api/health', { cache: 'no-store' }).then(function (res) { return res.json(); }).then(function (info) {
+      if (info.version !== '__BCTOOLS_VERSION__') throw new Error('软件版本已变化，请刷新页面后导入');
+      options.headers = Object.assign({}, options.headers || {}, { 'X-BCTools-Instance': info.instanceId });
+      return fetch(url, options);
+    });
+  }
+
   function findDownloadAnchor(row) {
     return row.querySelector('[data-testid="audio-download"]');
   }
@@ -99,7 +107,7 @@
       .then(function (blob) {
         var form = new FormData();
         form.append("file", blob, fileName);
-        return fetch(STAGE_URL, { method: "POST", body: form });
+        return backendFetch(STAGE_URL, { method: "POST", body: form });
       })
       .then(function (res) {
         if (!res.ok) throw new Error("上传失败");
@@ -149,7 +157,7 @@
             stopPolling(stageId);
             removeCardByFileName(fileName);
             // Clean up the backend stage now that um-react's card is gone.
-            fetch(STAGE_URL + "/" + encodeURIComponent(stageId), { method: "DELETE" }).catch(function () {});
+            backendFetch(STAGE_URL + "/" + encodeURIComponent(stageId), { method: "DELETE" }).catch(function () {});
           }
         })
         .catch(function () {

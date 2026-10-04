@@ -3,28 +3,23 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
-// GetDataRootDir 返回数据根目录：<exe 同目录>\BctoolData。
-//
-// 5.7.0 起所有持久化数据（data.json / MusicFiles / snapshots / logs / bin /
-// decrypt-staging / temp）都集中在这个目录下，迁移时整目录拷走即可。
-//
-// dev（`go run`）时 exe 位于 %TEMP%\go-buildXXXX，每次构建都不同，
-// 此时回退到工作目录（GoServer\BctoolData），保证开发数据可复现。
+// GetDataRootDir is per-user and independent of the executable location.
 func GetDataRootDir() (string, error) {
-	exe, err := os.Executable()
+	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Dir(exe)
-	if isGoRunTempDir(dir) {
-		if wd, wdErr := os.Getwd(); wdErr == nil {
-			dir = wd
+	if runtime.GOOS == "windows" {
+		dir, err = os.UserCacheDir() // %LOCALAPPDATA%, not roaming or Program Files
+		if err != nil {
+			return "", err
 		}
 	}
-	return filepath.Join(dir, "BctoolData"), nil
+	return filepath.Join(dir, "BCTools", "Data"), nil
 }
 
 // isGoRunTempDir 判断目录是否为 `go run` 的临时构建目录（%TEMP%\go-buildNNN）。

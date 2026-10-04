@@ -9,6 +9,8 @@ import { dayjs } from "../utils/datetime"
 import { domToPng } from "modern-screenshot"
 import DOMPurify from "dompurify"
 import type { Song, SongType, TimeSlot } from "../api/types"
+import { broadcastPeriod } from "../utils/broadcastPeriod"
+import { flushAllSaves } from "../utils/pendingSaves"
 
 // 导出图片 DOM 的样式：之前抽到 Web/src/styles/export.css 里；该文件只为
 // domToPng 注入样式使用，没有别的消费者——直接 inline 在这里，把「调用方
@@ -366,13 +368,7 @@ export function useExportImage() {
 
   // 推断广播时段：优先用 period，缺失时用 createdAt（兜底 date）的小时，异常归下午
   function periodOf(s: Song): "noon" | "afternoon" {
-    if (s.period === "noon" || s.period === "afternoon") return s.period
-    const ts = s.createdAt || s.date
-    if (ts) {
-      const h = dayjs(ts).hour()
-      if (!Number.isNaN(h)) return h < 12 ? "noon" : "afternoon"
-    }
-    return "afternoon"
+    return broadcastPeriod(s)
   }
 
   function isMultiWeek(dates: string[]): boolean {
@@ -688,6 +684,7 @@ export function useExportImage() {
   }
 
   async function generateImage(dates: string[], type: SongType): Promise<string> {
+    await flushAllSaves()
     // 导出是唯一真正需要中文分词的场景，在这里等词典就绪。
     // 词典是动态 import 的独立块（约 1.25 MB gzip），不进首屏。
     await ensureSegmenter()

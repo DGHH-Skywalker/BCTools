@@ -20,6 +20,11 @@
                 @update:value="(v: string) => updateTitle(song.id, v)"
                 @blur="saveTitle(song.id, titleDrafts[song.id] ?? song.title)"
               />
+              <n-space v-if="!song.period" size="small">
+                <n-text type="warning">历史时段待确认</n-text>
+                <n-button size="tiny" @click="confirmPeriod(song.id, 'noon')">中午</n-button>
+                <n-button size="tiny" @click="confirmPeriod(song.id, 'afternoon')">下午</n-button>
+              </n-space>
               <div v-if="warningsFor(song).length" class="duplicate-warning">
                 <div v-for="warning in warningsFor(song)" :key="warning.id">
                   {{ t("dorm.duplicateWarning", { date: warning.date, title: warning.title }) }}
@@ -53,6 +58,8 @@ import { Delete } from "@icon-park/vue-next"
 import AudioPlayButton from "../common/AudioPlayButton.vue"
 import { dayjs } from "../../utils/datetime"
 import type { Song } from "../../api/types"
+import { queueTitle, flushTitle } from "../../utils/pendingSaves"
+import { broadcastPeriod } from "../../utils/broadcastPeriod"
 
 const props = defineProps<{
   weekDates: string[]
@@ -89,27 +96,32 @@ function songsFor(date: string, period: "noon" | "afternoon"): Song[] {
   return songsStore.broadcastSongs
     .filter((s) => {
       if (s.date !== date) return false
-      const p = s.period || defaultPeriod(s)
+      const p = broadcastPeriod(s)
       return p === period
     })
     .sort((a, b) => a.id - b.id)
 }
 
-function defaultPeriod(s: Song): "noon" | "afternoon" {
-  return s.createdAt ? (dayjs(s.createdAt).hour() < 12 ? "noon" : "afternoon") : "afternoon"
-}
-
 async function saveTitle(id: number, title: string) {
   try {
-    await songsStore.updateSong(id, { title })
-    delete titleDrafts.value[id]
+    await flushTitle(id)
   } catch (err: any) {
     console.error(err)
   }
 }
 
 function updateTitle(id: number, title: string) {
+  const song = songsStore.broadcastSongs.find(s => s.id === id)
   titleDrafts.value[id] = title
+  queueTitle(id, title, async value => {
+    await songsStore.updateSong(id, { title: value })
+    if (titleDrafts.value[id] === value) delete titleDrafts.value[id]
+  }, song ? { type: "broadcast", originalTitle: song.title, date: song.date, createdAt: song.createdAt } : undefined)
+}
+
+async function confirmPeriod(id: number, period: "noon" | "afternoon") {
+  await flushTitle(id)
+  await songsStore.updateSong(id, { period })
 }
 
 async function addSong(date: string, period: "noon" | "afternoon") {
@@ -122,6 +134,7 @@ async function addSong(date: string, period: "noon" | "afternoon") {
 
 async function removeSong(id: number) {
   try {
+    await flushTitle(id)
     await songsStore.deleteSong(id)
   } catch (err: any) {
     console.error(err)

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"broadcast-tool/converter"
@@ -33,6 +34,7 @@ type MusicLibrary struct {
 	Repo      *repo.Repository
 	Converter *converter.FFMpegConverter
 	Logger    func(format string, args ...interface{})
+	syncMu    sync.Mutex
 }
 
 func NewMusicLibrary(
@@ -85,7 +87,7 @@ func weekDates(weekName string) ([]string, error) {
 	if isoWd == 0 {
 		isoWd = 7
 	}
-	monday := jan4.AddDate(0, 0, -(isoWd - 1)+(week-1)*7)
+	monday := jan4.AddDate(0, 0, -(isoWd-1)+(week-1)*7)
 	dates := make([]string, 7)
 	for i := 0; i < 7; i++ {
 		dates[i] = monday.AddDate(0, 0, i).Format("2006-01-02")
@@ -112,10 +114,10 @@ func isoWeekday(dateStr string) int {
 
 // weekSlot 是期望布局里「一个时段 = 一个编号」的描述。
 type weekSlot struct {
-	Num   string        // "05"
-	Date  string        // 该时段属于周内的哪一天
+	Num    string        // "05"
+	Date   string        // 该时段属于周内的哪一天
 	SlotID string        // TimeSlot.ID
-	Songs []models.Song // 该时段的歌（按播放顺序），只含有音频文件的
+	Songs  []models.Song // 该时段的歌（按播放顺序），只含有音频文件的
 }
 
 // computeLayout 计算 weekName 的期望布局：遍历周一~周日的全部时段，按顺序编号。
@@ -215,9 +217,9 @@ func (l *MusicLibrary) AbsSongPath(rel string) string {
 
 // obtainSongSource 返回一份「只包含这首歌、带原始 ID3 标签」的独立 MP3 路径。
 //
-//	- FilePath 指向暂存区：暂存文件本身就是独立 MP3。
-//	- FilePath 指向周文件夹且该编号是单曲：文件本身。
-//	- FilePath 指向合并文件：按 Parts 信息抽出到临时文件。
+//   - FilePath 指向暂存区：暂存文件本身就是独立 MP3。
+//   - FilePath 指向周文件夹且该编号是单曲：文件本身。
+//   - FilePath 指向合并文件：按 Parts 信息抽出到临时文件。
 //
 // 返回的临时文件由调用方负责清理（cleanup 非 nil 时）。
 func (l *MusicLibrary) obtainSongSource(id int64) (path string, cleanup func(), err error) {
@@ -303,7 +305,7 @@ func (l *MusicLibrary) extractPart(mergedPath string, part models.MergedPart) (s
 	if err != nil {
 		return "", fmt.Errorf("read merged file: %w", err)
 	}
-	if part.Offset < 0 || part.Offset+part.Length > int64(len(data)) {
+	if part.Offset < 0 || part.Length < 0 || part.Offset > int64(len(data)) || part.Length > int64(len(data))-part.Offset {
 		return "", fmt.Errorf("part range out of bounds for %s", mergedPath)
 	}
 	var out []byte
@@ -412,6 +414,8 @@ func (l *MusicLibrary) buildMerged(songs []models.Song, outPath string) ([]model
 //  4. 临时文件改名就位；
 //  5. 一次性写回 data.json：新索引 + 该周歌曲的 FilePath + 孤儿歌的暂存迁移。
 func (l *MusicLibrary) SyncWeek(weekName string) error {
+	l.syncMu.Lock()
+	defer l.syncMu.Unlock()
 	slots, err := l.computeLayout(weekName)
 	if err != nil {
 		return err
@@ -439,10 +443,10 @@ func (l *MusicLibrary) SyncWeek(weekName string) error {
 	}
 
 	type result struct {
-		num    string
-		file   models.WeekFile
-		tmp    string // 构建产物（.tmp-NN.mp3）；keep 时为空
-		keep   bool
+		num  string
+		file models.WeekFile
+		tmp  string // 构建产物（.tmp-NN.mp3）；keep 时为空
+		keep bool
 	}
 	var results []result
 

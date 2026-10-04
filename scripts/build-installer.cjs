@@ -31,7 +31,7 @@ if (!fs.existsSync(path.join(DIST, "bctools.exe"))) {
 if (!fs.existsSync(SCRIPT)) fail(`Inno Setup 脚本不存在: ${SCRIPT}`)
 
 const versionSource = fs.readFileSync(VERSION_FILE, "utf8")
-const version = versionSource.match(/const\s+Version\s*=\s*"([^"]+)"/)?.[1]
+const version = versionSource.match(/(?:const|var)\s+Version\s*=\s*"([^"]+)"/)?.[1]
 if (!version) fail("无法从 GoServer/internal/version/version.go 读取版本号")
 
 const iscc = findISCC()

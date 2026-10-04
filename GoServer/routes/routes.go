@@ -25,6 +25,7 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 		if hs.Lifecycle != nil {
 			r.Get("/health", hs.Lifecycle.HandleHealth)
 			r.Get("/lifecycle/watch", hs.Lifecycle.HandleWatch)
+			r.Post("/lifecycle/client", hs.Lifecycle.HandleClient)
 			r.Post("/shutdown", hs.Lifecycle.HandleShutdown)
 			r.Post("/close-browser", hs.Lifecycle.HandleCloseBrowser)
 		}
@@ -64,6 +65,10 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 		r.Get("/update-log/latest", hs.UpdateLog.HandleLatest)
 		r.Post("/update-log/claim", hs.UpdateLog.HandleClaim)
 		r.Get("/system/status", hs.System.HandleStatus)
+		r.Get("/system/data-sources", hs.System.HandleDataSources)
+		r.Get("/system/data-sources/{sourceID}", hs.System.HandleSourcePreview)
+		r.Post("/system/data-sources/import", hs.System.HandleSourceImport)
+		r.Post("/system/search-directory", hs.System.HandleSearchDirectory)
 		r.Route("/network", func(r chi.Router) {
 			r.Get("/info", hs.Network.HandleGetInfo)
 			r.Get("/qr", hs.Network.HandleGetQR)

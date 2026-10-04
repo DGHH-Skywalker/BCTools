@@ -52,8 +52,7 @@ func onReady(cfg Config) {
 				// 先跑完关闭逻辑，再收起托盘，避免进程在 HTTP 优雅关闭
 				// 完成前就被消息循环退出带走。
 				invoke("exit", cfg.OnExit)
-				Stop()
-				return
+				// The callback calls Stop only after successful save confirmation.
 			}
 		}
 	}()

@@ -17,6 +17,22 @@ export const STORAGE_KEYS = {
 
 type StorageSpec = { key: string; legacy: readonly string[] }
 
+// Unlike optional preferences, a draft backup must report a storage failure.
+export function writeDraftBackup(key: string, value: unknown | null): void {
+  if (!key.startsWith("bctools.unsaved-titles.")) throw new Error("Invalid draft key")
+  if (value === null) localStorage.removeItem(key)
+  else localStorage.setItem(key, JSON.stringify(value))
+}
+export function readDraftBackups(): { key: string; value: unknown }[] {
+  const result: { key: string; value: unknown }[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith("bctools.unsaved-titles.")) continue
+    try { result.push({ key, value: JSON.parse(localStorage.getItem(key) || "null") }) } catch { /* preserve malformed backups */ }
+  }
+  return result
+}
+
 /** 读原始字符串。新 key 缺失时回落到历史 key，并迁移到新 key。 */
 export function readRaw(spec: StorageSpec): string | null {
   try {

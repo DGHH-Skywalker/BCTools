@@ -79,7 +79,7 @@ Web/src/
 ## 关键配置
 
 - 监听端口：`1743`（`GoServer/main.go`）
-- 数据目录：`%APPDATA%\BroadcastTool\`（`GoServer/paths/paths.go`）
+- 正式数据目录：`%LOCALAPPDATA%\BCTools\Data\`（`GoServer/paths/paths.go`），开发目录独立且使用端口 `1746`
 - 默认主题色：`#0086C3`（`Web/src/constants/colors.ts` / `Web/src/styles/variables.css`）
 - 路由模式：`createWebHashHistory`（不依赖服务端路由）
 
@@ -163,3 +163,5 @@ go test ./...
 
 - `bctools.exe`
 - `BCTools-Setup.exe`（需要 MinGW-w64）
+
+5.9 起安装包使用 Inno Setup。版本登记和受管程序副本放在固定数据目录的父目录；迁移前保留来源。安全退出协议为版本 2，页面确认后仍须排空在途写入和后台任务、刷新仓库，才能返回保存完成确认。历史缺失的播音 period 不能按创建时间写死。时段 ID 不按数组位置继承。

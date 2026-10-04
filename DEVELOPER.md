@@ -67,8 +67,8 @@ npm run dev
 ```
 
 行为：
-- `Web/` 走 Vite dev server，端口 5173；自动把 `/api/*` 代理到 `:1743`
-- `GoServer/` 走 `go run . --dev`，端口 1743；`--dev` 标志会顶替已运行的生产版后端
+- `Web/` 走 Vite dev server，端口 5173；自动把 `/api/*` 代理到 `:1746`
+- `GoServer/` 走 `go run . --dev`，端口 1746；开发数据使用独立临时目录，不替换正式后端
 - 任一进程退出，另一个会被 concurrently `--kill-others-on-fail` 一起杀掉
 
 单独跑子任务：
@@ -139,23 +139,13 @@ npm run build:clean
 #       GoServer/internal/binembed/bin, dist/, installer/obj, installer/setup.exe
 ```
 
-### 4.6 数据迁移（5.6.0 完整版）
+### 4.6 固定目录及旧歌单恢复（5.9）
 
-设置页 → 「数据迁移」(`/settings/migration`)。两种导出 + 两种导入，路径输入框可粘贴。
+正式数据使用 `%LOCALAPPDATA%\BCTools\Data`。首次启动从已发现的旧目录复制；多个不同来源会要求选择，原目录保留。
 
-**导出：**
-- **小清单（不带歌）**：下载单个 JSON，含所有元数据（歌名、时段、栏目映射）。包小可微信传；歌曲需在新机器另行导入。
-- **完整搬家（推荐）**：在选定文件夹下新建 `xxxx年xx月xx日广播站点歌工具数据备份N/`，内含 data.json + 所有歌曲 mp3 + 快照 + 删除日志。换电脑时首选。
+设置页 → 软件信息 → 数据目录与旧歌单，可以添加来源目录、逐条比对并选择补回记录。导入前备份，当前记录不覆盖；冲突记录使用新 ID，合并音频按原索引还原到独立暂存文件。缺少文件或来源在比对后发生变化时停止导入。
 
-**导入（两种方式，二选一）：**
-- **从文件夹装回（推荐）**：选完整的备份目录；歌曲文件会一起回来。
-- **从 JSON 文件装回**：选之前下载的清单 JSON；只回歌名与设置，不带音频。
-
-**模式：**
-- `merge`（默认）：追加新歌，时段按 ID 合并（自定义的不会被覆盖）
-- `replace`：先清空本机 dorm / broadcast 歌单与时段，再整体装入
-
-后端：`POST /api/migration/export`、`POST /api/migration/import`。
+API：`GET /api/system/data-sources`、`GET /api/system/data-sources/:id`、`POST /api/system/data-sources/import`、`POST /api/system/search-directory`。这些操作限本机。所有修改请求携带当前运行实例的 `X-BCTools-Instance`；退出和生命周期请求单独处理。
 
 ---
 
@@ -234,7 +224,7 @@ bctools/
 这些是 5.6.0 沉淀下来的「改了会炸」的不成文规定，新人务必读完：
 
 - **音频转码**：`converter/process.go` 的 `toMP3()` 已实现「已是 MP3 就跳过重编码」。一首歌重编码 ~4.8s，搬运 ~1ms，且能避免二次有损。**不要**改回无条件 `ConvertToMP3`。
-- **um-react 导入**：走 `POST /api/decrypt/stage/:id/import` **就地入库**到 `%APPDATA%\BroadcastTool\songs`，不要改回「下载回浏览器再上传」——一首 12MB 的歌要少跑 ~200ms。
+- **um-react 导入**：走 `POST /api/decrypt/stage/:id/import` **就地入库**到固定数据目录的 `MusicFiles/_staging`，不要改回「下载回浏览器再上传」。桥接脚本通过构建时注入的版本和当前实例标识拒绝失效页面写入。
 - **换卡导出（organize）**：编号锚定「时段位置」不是歌曲（见 `Web/src/utils/exportEntries.ts`）。空时段必须生成静音占位，否则整天空着会让后面曲序整体前移。同一时段多首歌合并成一个 MP3：`converter/merge.go` 用字节拼接 + 剥 ID3 标签，**不要**改成 ffmpeg concat（精简版 ffmpeg 没那个 demuxer）。
 - **进程退出**：托盘 / Ctrl-C / 前端 `POST /api/shutdown` 三条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），**不要**把它挪到子 goroutine。
 - **segmentit**：词典约 1.25 MB（gzip），动态 `import()`，未就绪时 `segmentChineseTitle` 原样返回标题。**不要**改回静态 import。

@@ -256,11 +256,7 @@ func (s *SongStore) AddSong(req models.CreateSongRequest) (models.Song, error) {
 			period = strings.TrimSpace(*req.Period)
 		}
 		if req.Type == "broadcast" && period == "" {
-			if now.Hour() < 12 {
-				period = "noon"
-			} else {
-				period = "afternoon"
-			}
+			period = models.BroadcastPeriod(now)
 		}
 		// 新宿舍歌曲追加到所在时段末尾：取同日同时段已有歌曲的最大 Order + 1。
 		order := 0
@@ -322,6 +318,9 @@ func (s *SongStore) UpdateSong(id int64, req models.UpdateSongRequest) (models.S
 			return store.ErrNotFound
 		}
 		song := &(*songs)[idx]
+		if req.ExpectedTitle != nil && song.Title != *req.ExpectedTitle {
+			return store.ErrEditConflict
+		}
 		if req.Title != nil {
 			song.Title = strings.TrimSpace(*req.Title)
 		}

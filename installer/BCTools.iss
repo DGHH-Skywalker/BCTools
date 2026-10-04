@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "5.8.0.0"
+  #define MyAppVersion "5.9.0.0"
 #endif
 
 #define MyAppName "小播点歌工具"
@@ -69,6 +69,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 Name: "{autoprograms}\BCTools\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
 
 [Run]
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--register-only --no-browser"; Flags: runhidden waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
@@ -129,9 +130,9 @@ begin
   // BCTools exposes a supported local shutdown endpoint. Ask it to stop first,
   // then wait before allowing Inno Setup to replace any application file.
   Exec('powershell.exe',
-    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod -Uri ''http://127.0.0.1:1743/api/shutdown'' -Method Post -TimeoutSec 3 | Out-Null } catch {}"',
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod -Uri ''http://127.0.0.1:1743/api/shutdown'' -Method Post -TimeoutSec 75 | Out-Null } catch {}"',
     '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  for Attempt := 1 to 20 do
+  for Attempt := 1 to 120 do
   begin
     if not IsBCToolsRunning then Exit;
     Sleep(250);
@@ -180,8 +181,8 @@ begin
   // Interactive users may opt in here; silent removal requires /REMOVEUSERDATA.
   RemoveUserData := HasSwitch('/REMOVEUSERDATA');
   if (not UninstallSilent) and (not RemoveUserData) then
-    RemoveUserData := MsgBox('是否同时删除 BctoolData 中的歌曲、设置、日志和快照？' + #13#10 +
-      '选择“否”会保留全部用户数据。', mbConfirmation, MB_YESNO) = IDYES;
+    RemoveUserData := MsgBox('是否删除旧安装目录 BctoolData 中的数据？' + #13#10 +
+      '新版固定数据目录始终保留。选择“否”也会保留旧数据。', mbConfirmation, MB_YESNO) = IDYES;
   Result := True;
 end;
 

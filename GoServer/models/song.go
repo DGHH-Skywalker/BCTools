@@ -25,13 +25,14 @@ type ReorderSongsRequest struct {
 
 // UpdateSongRequest contains only the fields to update
 type UpdateSongRequest struct {
-	Date       *string  `json:"date,omitempty"`
-	Title      *string  `json:"title,omitempty"`
-	Artist     *string  `json:"artist,omitempty"`
-	Remark     *string  `json:"remark,omitempty"`
-	FilePath   *string  `json:"filePath,omitempty"`
-	TimeSlotID **string `json:"timeSlotId,omitempty"` // double pointer: nil=not set, *nil=set to null
-	Period     *string  `json:"period,omitempty"`
+	ExpectedTitle *string  `json:"expectedTitle,omitempty"`
+	Date          *string  `json:"date,omitempty"`
+	Title         *string  `json:"title,omitempty"`
+	Artist        *string  `json:"artist,omitempty"`
+	Remark        *string  `json:"remark,omitempty"`
+	FilePath      *string  `json:"filePath,omitempty"`
+	TimeSlotID    **string `json:"timeSlotId,omitempty"` // double pointer: nil=not set, *nil=set to null
+	Period        *string  `json:"period,omitempty"`
 }
 
 // CreateSongRequest contains fields for creating a new song

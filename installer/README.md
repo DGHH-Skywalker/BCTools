@@ -8,14 +8,15 @@ not used by the root build or CI.
 
 - Current-user application: `%LOCALAPPDATA%\Programs\BCTools\bctools.exe`.
 - All-users application: `%ProgramFiles%\BCTools\bctools.exe`.
-- User data: `<install directory>\BctoolData`.
+- User data: `%LOCALAPPDATA%\BCTools\Data` for the current Windows user, independent of the executable directory.
 - The Go executable embeds both web frontends and ffmpeg/ffprobe. At runtime it
-  extracts the media tools under `BctoolData\bin`.
+  extracts the media tools under the fixed data directory's `bin` folder.
 
-Inno Setup owns only application files and shortcuts. It does not register
-`BctoolData` as an installed file, so upgrades and ordinary uninstalls preserve
-the directory. Interactive uninstall asks whether to remove it. Silent uninstall
-preserves it unless `/REMOVEUSERDATA` is supplied explicitly.
+Inno Setup owns application files and shortcuts. Upgrades and uninstalls preserve
+the fixed data directory. `/REMOVEUSERDATA` applies only to the historical
+installation-relative `BctoolData` directory; interactive removal states this
+scope. A registration-only run records installed programs without opening the UI
+or migrating a database during silent installation.
 
 ## Installation modes
 

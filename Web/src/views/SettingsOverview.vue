@@ -36,6 +36,7 @@
         </n-card>
       </n-grid-item>
     </n-grid>
+    <DataSources />
   </PageContainer>
 </template>
 
@@ -47,6 +48,7 @@ import { useSettingsStore } from "../stores/settings"
 import { useTheme } from "../composables/useTheme"
 import { Help } from "@icon-park/vue-next"
 import PageContainer from "../components/ui/PageContainer.vue"
+import DataSources from "../components/settings/DataSources.vue"
 
 const { t } = useI18n()
 const router = useRouter()

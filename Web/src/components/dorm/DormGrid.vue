@@ -98,6 +98,7 @@ import { useSongDuplicateWarnings } from "../../composables/useSongDuplicateWarn
 import draggable from "vuedraggable"
 import { dayjs } from "../../utils/datetime"
 import type { Song, TimeSlot } from "../../api/types"
+import { queueTitle, flushTitle } from "../../utils/pendingSaves"
 
 const props = defineProps<{
   weekDates: string[]
@@ -219,7 +220,12 @@ function parseTime(time: string): number {
 }
 
 function updateTitle(id: number, title: string) {
+  const original = songsStore.dormSongs.find(s => s.id === id)
   pendingTitles[id] = title
+  queueTitle(id, title, async value => {
+    await songsStore.updateSong(id, { title: value })
+    if (pendingTitles[id] === value) delete pendingTitles[id]
+  }, original ? { type: "dorm", originalTitle: original.title, date: original.date, createdAt: original.createdAt } : undefined)
   const song = editingSongs.value.find((s) => s.id === id)
   if (song) {
     song.title = title
@@ -233,11 +239,8 @@ function updateTitle(id: number, title: string) {
 }
 
 async function saveTitle(id: number) {
-  const title = pendingTitles[id]
-  if (title === undefined) return
-  delete pendingTitles[id]
   try {
-    await songsStore.updateSong(id, { title })
+    await flushTitle(id)
   } catch (err: any) {
     console.error(err)
   }
@@ -249,6 +252,7 @@ function goToImport(date: string, timeSlotId?: string) {
 
 async function removeSong(id: number) {
   try {
+    await flushTitle(id)
     await songsStore.deleteSong(id)
   } catch (err: any) {
     console.error(err)

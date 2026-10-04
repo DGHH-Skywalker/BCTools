@@ -120,7 +120,10 @@ else { fs.writeFileSync(idxPath, patched, "utf8"); log("  已设置路由 base �
 
 // 注入桥接脚本
 if (fs.existsSync(BRIDGE_SRC)) {
-  fs.copyFileSync(BRIDGE_SRC, path.join(DIST, "um-react-bridge.js"))
+  const versionSource = fs.readFileSync(path.join(ROOT, 'GoServer', 'internal', 'version', 'version.go'), 'utf8')
+  const version = versionSource.match(/(?:const|var)\s+Version\s*=\s*"([^"]+)"/)?.[1]
+  if (!version) fail('无法读取桥接脚本版本')
+  fs.writeFileSync(path.join(DIST, "um-react-bridge.js"), fs.readFileSync(BRIDGE_SRC, 'utf8').replaceAll('__BCTOOLS_VERSION__', version))
   html = fs.readFileSync(idxPath, "utf8")
   const tag = '<script src="./um-react-bridge.js"></script>'
   if (!html.includes(tag)) {

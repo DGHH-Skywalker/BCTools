@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
+	"time"
 
 	"broadcast-tool/models"
 	"broadcast-tool/response"
@@ -43,6 +46,13 @@ func (h *SettingsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.settingsService.ReconcileTimeSlots(&req)
+	oldSlots := h.Settings.GetTimeSlots()
+	if req.TimeSlots != nil {
+		if err := services.ValidateTimeSlots(oldSlots, *req.TimeSlots); err != nil {
+			response.WriteValidationError(w, err.Error())
+			return
+		}
+	}
 
 	if affected := h.settingsService.CheckTimeSlotDeletion(req); affected > 0 {
 		response.WriteJSON(w, http.StatusOK, models.SettingsConfirmResponse{
@@ -52,21 +62,34 @@ func (h *SettingsHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.settingsService.ApplyTimeSlotDeletion(req); err != nil {
-		response.WriteInternalError(w, err.Error())
-		return
-	}
-
-	if req.AdminPassword != nil {
-		if err := h.settingsService.UpdateAdminPassword(*req.AdminPassword); err != nil {
-			response.WriteInternalError(w, err.Error())
+	var passwordHash *string
+	if req.AdminPassword != nil && *req.AdminPassword != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(*req.AdminPassword), 12)
+		if err != nil {
+			response.WriteInternalError(w, "密码加密失败")
 			return
 		}
+		value := string(hash)
+		passwordHash = &value
 	}
-
-	if err := h.Settings.UpdateSettings(req); err != nil {
+	removed, err := h.Settings.UpdateSettingsAtomically(req, passwordHash)
+	if err != nil {
 		response.WriteInternalError(w, "保存设置失败")
 		return
+	}
+	for _, song := range removed {
+		id := ""
+		label := ""
+		if song.TimeSlotID != nil {
+			id = *song.TimeSlotID
+		}
+		for _, slot := range oldSlots {
+			if slot.ID == id {
+				label = fmt.Sprintf("%d-%s", slot.DayIndex, slot.Time)
+				break
+			}
+		}
+		h.DeletedLog.AppendDeletedSongLog(models.DeletedSongLog{OriginalID: song.ID, Date: song.Date, Title: song.Title, TimeSlotID: id, TimeSlotLabel: label, DeletedAt: time.Now().UTC().Format(time.RFC3339)})
 	}
 
 	// 时段配置（新增/删除/排序）会改变周文件夹的编号锚点，全量重排。

@@ -59,13 +59,8 @@ export async function fetchSilentMP3(): Promise<Blob> {
 // 用于「文件系统访问 API」那条导出路径——那条路径由浏览器自己写 SD 卡，
 // 拿不到服务端内部的合并结果。
 export async function fetchMergedMP3(sources: string[]): Promise<Blob> {
-  const res = await fetch("/api/files/merge", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sources }),
-  })
-  if (!res.ok) throw new Error("合并音频失败")
-  return res.blob()
+  const res = await apiClient.post('/files/merge', { sources }, { responseType: 'blob' })
+  return res.data
 }
 
 export async function deleteSourceFile(filename: string): Promise<void> {
