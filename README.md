@@ -138,18 +138,22 @@ API 文档见 [`GoServer/docs/api.md`](GoServer/docs/api.md)。
 
 ## 数据目录
 
-所有数据留在本机 `%APPDATA%\BroadcastTool\`：
+所有正式数据使用当前用户固定目录 `%LOCALAPPDATA%\BCTools\Data\`，与程序位置无关：
 
 ```
 ├── data.json               主数据（歌单 + 设置）
 ├── deleted_songs_log.json  删除日志
-├── songs/                  歌曲文件
+├── MusicFiles/             按周归档的歌曲及 _staging 暂存
 ├── snapshots/              每日快照备份
 ├── decrypt-staging/        um-react 解密暂存
 ├── temp/                   临时目录（启动时清空）
 ├── logs/                   滚动日志
 └── bin/                    运行时释放的 ffmpeg/ffprobe
 ```
+
+首次启动会检查程序旁的旧 `BctoolData`、默认安装位置和旧 `%APPDATA%\BroadcastTool`。迁移采用复制，来源保留；多份不同歌单需要选择来源。软件信息页可登记其他目录、比对并补回旧记录，导入前自动备份，冲突记录另存。
+
+实现新启动协议的程序会比较已登记版本、桌面/下载/安装目录及手动登记的搜索目录中的程序版本，并启动较新版的受管副本。退出旧实例前等待页面草稿、在途请求及后台写盘；无法确认保存时取消切换。完全未修改的历史 EXE 不具备跳转协议，首次升级请先在旧页面保存并从托盘退出。
 
 ## 已知限制
 

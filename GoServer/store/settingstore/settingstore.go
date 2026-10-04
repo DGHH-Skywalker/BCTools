@@ -4,6 +4,7 @@ import (
 	"broadcast-tool/internal/repo"
 	"broadcast-tool/internal/version"
 	"broadcast-tool/models"
+	"fmt"
 )
 
 // SettingsStore handles application settings.
@@ -86,7 +87,40 @@ func (s *SettingsStore) GetTimeSlots() []models.TimeSlot {
 
 // UpdateSettings updates settings fields from request (partial update).
 func (s *SettingsStore) UpdateSettings(req models.UpdateSettingsRequest) error {
-	return s.repo.Write(func(data *repo.Data) error {
+	_, err := s.UpdateSettingsAtomically(req, nil)
+	return err
+}
+
+// Settings and affected song assignments share one durable commit. A failed
+// settings write must not leave songs detached from their original slots.
+func (s *SettingsStore) UpdateSettingsAtomically(req models.UpdateSettingsRequest, passwordHash *string) ([]models.Song, error) {
+	removed := []models.Song{}
+	err := s.repo.Write(func(data *repo.Data) error {
+		if req.TimeSlots != nil {
+			kept := map[string]bool{}
+			for _, slot := range *req.TimeSlots {
+				kept[slot.ID] = true
+			}
+			old := map[string]bool{}
+			for _, slot := range data.Settings.TimeSlots {
+				old[slot.ID] = true
+			}
+			for _, list := range []*[]models.Song{&data.DormSongs, &data.BroadcastSongs} {
+				for i := range *list {
+					song := &(*list)[i]
+					if song.TimeSlotID != nil && old[*song.TimeSlotID] && !kept[*song.TimeSlotID] {
+						if !req.Confirmed {
+							return fmt.Errorf("时段关联在比对后发生变化，请重新确认删除")
+						}
+						removed = append(removed, *song)
+						song.TimeSlotID = nil
+					}
+				}
+			}
+		}
+		if passwordHash != nil {
+			data.Settings.AdminPasswordHash = *passwordHash
+		}
 		if req.AllowTemplateJS != nil {
 			data.Settings.AllowTemplateJS = *req.AllowTemplateJS
 		}
@@ -116,6 +150,10 @@ func (s *SettingsStore) UpdateSettings(req models.UpdateSettingsRequest) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return removed, nil
 }
 
 // SetAdminPassword sets the bcrypt password hash.

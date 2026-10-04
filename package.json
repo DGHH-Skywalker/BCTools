@@ -1,6 +1,6 @@
 {
   "name": "bctools",
-  "version": "5.8.0.0",
+  "version": "5.9.0.0",
   "private": true,
   "description": "小播点歌工具 — Vue、um-react、Go 与 Inno Setup 的一体化构建入口。",
   "type": "module",
@@ -8,7 +8,7 @@
     "predev": "node scripts/ensure-root-deps.cjs",
     "dev": "concurrently -n web,api -c blue,green --kill-others-on-fail \"npm:dev:web\" \"npm:dev:server\"",
     "dev:web": "npm --prefix Web run dev",
-    "dev:server": "go -C GoServer run . -- --dev",
+    "dev:server": "go -C GoServer run . --dev",
     "prebuild": "node scripts/ensure-root-deps.cjs",
     "build": "npm run build:prepare && npm run build:server && npm run build:installer",
     "build:prepare": "concurrently --kill-others-on-fail -n vue,um-react,ffmpeg -c blue,magenta,green \"npm:build:web-and-copy\" \"npm:build:um-react\" \"npm:build:inject-ffmpeg\"",

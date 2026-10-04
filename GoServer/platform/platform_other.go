@@ -4,6 +4,8 @@ package platform
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"os/exec"
 	"runtime"
 )
@@ -31,4 +33,10 @@ func OpenBrowser(url string) error {
 // WindowsInfo 在非 Windows 平台恒返回 false。
 func WindowsInfo() (isWindows bool, version string) {
 	return false, ""
+}
+
+func ShowError(message string) { log.Print(message) }
+
+func SelectOption(title string, options []string) (int, error) {
+	return -1, fmt.Errorf("%s：%v；请用 --data-source 指定来源", title, options)
 }

@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"regexp"
 	"time"
 
 	"broadcast-tool/models"
@@ -51,25 +52,69 @@ func (s *SettingsUpdateService) ReconcileTimeSlots(req *models.UpdateSettingsReq
 	if req.TimeSlots == nil {
 		return
 	}
-	oldSlots := s.Settings.GetTimeSlots()
-	used := make(map[string]bool)
-	known := make(map[string]bool, len(oldSlots))
-	byPosition := make(map[string]string, len(oldSlots))
+	*req.TimeSlots = reconcileSlots(s.Settings.GetTimeSlots(), *req.TimeSlots)
+}
+
+func reconcileSlots(oldSlots, submitted []models.TimeSlot) []models.TimeSlot {
+	result := append([]models.TimeSlot{}, submitted...)
+	known := map[string]models.TimeSlot{}
+	used := map[string]bool{}
 	for _, slot := range oldSlots {
-		known[slot.ID] = true
-		byPosition[slotPosition(slot)] = slot.ID
+		known[slot.ID] = slot
 	}
-	for i := range *req.TimeSlots {
-		slot := &(*req.TimeSlots)[i]
-		if known[slot.ID] && !used[slot.ID] {
+	// Reserve ALL explicit identities before trying to match recreated rows.
+	for _, slot := range result {
+		if old, ok := known[slot.ID]; ok && old.DayIndex == slot.DayIndex {
 			used[slot.ID] = true
+		}
+	}
+	for i := range result {
+		slot := &result[i]
+		if _, ok := known[slot.ID]; ok {
 			continue
 		}
-		if id := byPosition[slotPosition(*slot)]; id != "" && !used[id] {
-			slot.ID = id
-			used[id] = true
+		var candidates []string
+		for _, old := range oldSlots {
+			if !used[old.ID] && old.DayIndex == slot.DayIndex && old.Time == slot.Time {
+				candidates = append(candidates, old.ID)
+			}
+		}
+		if len(candidates) == 1 {
+			slot.ID = candidates[0]
+			used[slot.ID] = true
+		}
+		// Never infer identity from order: inserting/deleting/reordering changes it.
+		// A real edit keeps its original ID; an unmatched new slot is genuinely new.
+	}
+	return result
+}
+
+func ValidateTimeSlots(old, submitted []models.TimeSlot) error {
+	known := map[string]models.TimeSlot{}
+	for _, slot := range old {
+		known[slot.ID] = slot
+	}
+	ids := map[string]bool{}
+	positions := map[string]bool{}
+	clock := regexp.MustCompile(`^(?:[01][0-9]|2[0-3]):[0-5][0-9]$`)
+	for _, slot := range submitted {
+		if slot.ID == "" || ids[slot.ID] {
+			return fmt.Errorf("时段 ID 为空或重复")
+		}
+		ids[slot.ID] = true
+		if slot.DayIndex < 1 || slot.DayIndex > 7 || slot.Order < 1 || !clock.MatchString(slot.Time) {
+			return fmt.Errorf("时段星期、顺序或时间无效")
+		}
+		key := fmt.Sprintf("%d:%d", slot.DayIndex, slot.Order)
+		if positions[key] {
+			return fmt.Errorf("同一天的时段顺序重复")
+		}
+		positions[key] = true
+		if old, ok := known[slot.ID]; ok && old.DayIndex != slot.DayIndex {
+			return fmt.Errorf("已有时段不能跨星期复用 ID")
 		}
 	}
+	return nil
 }
 
 // ApplyTimeSlotDeletion unassigns songs from deleted time slots and logs them.

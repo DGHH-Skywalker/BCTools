@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"broadcast-tool/models"
 	"broadcast-tool/response"
@@ -28,6 +30,9 @@ type SongHandler struct {
 	Snapshots     *snapshotstore.SnapshotStore
 	Library       *services.MusicLibrary
 	importService *services.ImportService
+	jobs          sync.WaitGroup
+	jobMu         sync.Mutex
+	jobError      error
 }
 
 func NewSongHandler(songs *songstore.SongStore, snapshots *snapshotstore.SnapshotStore, library *services.MusicLibrary) *SongHandler {
@@ -50,6 +55,9 @@ func (h *SongHandler) syncAfterChange(songs ...models.Song) {
 			continue
 		}
 		if err := h.Library.SyncSongWeek(s); err != nil {
+			h.jobMu.Lock()
+			h.jobError = err
+			h.jobMu.Unlock()
 			log.Printf("musiclibrary: sync week for song %d failed: %v", s.ID, err)
 		}
 	}
@@ -58,7 +66,36 @@ func (h *SongHandler) syncAfterChange(songs ...models.Song) {
 // scheduleSyncAfterChange keeps editing responsive. The playlist is already
 // committed; a later export also performs a full synchronization.
 func (h *SongHandler) scheduleSyncAfterChange(songs ...models.Song) {
-	go h.syncAfterChange(songs...)
+	h.jobs.Add(1)
+	go func() { defer h.jobs.Done(); h.syncAfterChange(songs...) }()
+}
+
+// Call only after HTTP mutations have been drained and frozen.
+func (h *SongHandler) WaitForSync() { h.jobs.Wait() }
+
+func (h *SongHandler) WaitForPersistence(ctx context.Context) error {
+	done := make(chan error, 1)
+	go func() {
+		h.jobs.Wait()
+		h.jobMu.Lock()
+		err := h.jobError
+		h.jobMu.Unlock()
+		if err != nil && h.Library != nil {
+			err = h.Library.SyncAll()
+			if err == nil {
+				h.jobMu.Lock()
+				h.jobError = nil
+				h.jobMu.Unlock()
+			}
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (h *SongHandler) HandleSort(w http.ResponseWriter, r *http.Request) {
@@ -188,6 +225,13 @@ func (h *SongHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 			var title string
 			json.Unmarshal(val, &title)
 			req.Title = &title
+		case "expectedTitle":
+			var title string
+			if err := json.Unmarshal(val, &title); err != nil {
+				response.WriteValidationError(w, "预期歌名无效")
+				return
+			}
+			req.ExpectedTitle = &title
 		case "artist":
 			var artist string
 			json.Unmarshal(val, &artist)
@@ -223,7 +267,10 @@ func (h *SongHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	song, err := h.Songs.UpdateSong(id, req)
-	if err == store.ErrNotFound {
+	if err == store.ErrEditConflict {
+		response.WriteError(w, http.StatusConflict, "EDIT_CONFLICT", "歌曲已被其他页面修改，请重新比对草稿")
+		return
+	} else if err == store.ErrNotFound {
 		response.WriteNotFoundError(w, "歌曲不存在")
 		return
 	} else if err == store.ErrSlotConflict {

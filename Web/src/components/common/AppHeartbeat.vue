@@ -1,10 +1,16 @@
 <template>
-  <div></div>
+  <DraftRecovery :active-clients="activeClients" />
+  <div v-if="unsavedCount || saveError || handoffFrozen" role="status" style="position:fixed;bottom:8px;left:16px;z-index:9999;background:#fff4d6;color:#502f00;padding:8px 12px;border-radius:6px;">
+    {{ handoffFrozen ? '正在保存并切换版本，请稍候…' : (saveError || `正在保存 ${unsavedCount} 项编辑…`) }}
+    <button v-if="saveError && !handoffFrozen" @click="retrySave">重试保存</button>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue"
+import { onMounted, onUnmounted, ref, watch } from "vue"
 import { useNotification } from "naive-ui"
+import { unsavedCount, saveError, handoffFrozen, activeMutations, browserClientID, flushAllSaves, reportSaveState } from "../../utils/pendingSaves"
+import DraftRecovery from "./DraftRecovery.vue"
 
 const notification = useNotification()
 let intervalId: number | undefined
@@ -12,6 +18,48 @@ let watchAbort: AbortController | undefined
 let offlineNotified = false
 // 后端主动通知关闭后，不再弹「连接异常」——那是预期行为，不是故障。
 let shuttingDown = false
+let clientTimer: ReturnType<typeof setTimeout> | undefined
+let stopped = false
+let ack = ""
+const activeClients = ref<string[]>([])
+
+async function retrySave() {
+  try { await flushAllSaves() } catch { /* error remains visible */ }
+}
+
+async function reportClient() {
+  try {
+    const state = await reportSaveState(ack)
+    activeClients.value = state.clients || []
+    if (saveError.value === '无法确认保存状态；请检查连接，暂勿关闭页面') saveError.value = ''
+    if (state.prepare) {
+      handoffFrozen.value = true
+      document.querySelector<HTMLElement>('#app')?.setAttribute('inert', '')
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      await flushAllSaves()
+      ack = state.prepare
+    } else {
+      ack = ''
+      handoffFrozen.value = false
+      document.querySelector<HTMLElement>('#app')?.removeAttribute('inert')
+    }
+  } catch {
+    // Never acknowledge a failed flush or discard an unsaved draft.
+    ack = ''
+    saveError.value ||= '无法确认保存状态；请检查连接，暂勿关闭页面'
+  } finally {
+    if (!stopped && !shuttingDown) clientTimer = setTimeout(reportClient, 1000)
+  }
+}
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (unsavedCount.value || activeMutations.value) { event.preventDefault(); event.returnValue = '' }
+}
+function leave() {
+  if (!unsavedCount.value && !activeMutations.value) {
+    navigator.sendBeacon?.('/api/lifecycle/client', new Blob([JSON.stringify({ id: browserClientID, leave: true })], { type: 'application/json' }))
+  }
+}
 
 async function ping() {
   if (shuttingDown) return
@@ -62,13 +110,27 @@ async function watchShutdown() {
   }
 }
 
+watch([unsavedCount, activeMutations], () => {
+  if (!stopped && !shuttingDown) void reportSaveState(ack).catch(() => { /* periodic poll handles recovery */ })
+})
+
 onMounted(() => {
+  stopped = false
+  document.querySelector<HTMLElement>('#app')?.setAttribute('inert', '')
+  void reportClient()
+  window.addEventListener('beforeunload', beforeUnload)
+  window.addEventListener('pagehide', leave)
   ping()
   intervalId = window.setInterval(ping, 30000)
   watchShutdown()
 })
 
 onUnmounted(() => {
+  stopped = true
+  clearTimeout(clientTimer)
+  leave()
+  window.removeEventListener('beforeunload', beforeUnload)
+  window.removeEventListener('pagehide', leave)
   if (intervalId) window.clearInterval(intervalId)
   watchAbort?.abort()
 })

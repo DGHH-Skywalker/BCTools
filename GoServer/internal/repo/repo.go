@@ -11,6 +11,7 @@ import (
 
 	"broadcast-tool/models"
 	"broadcast-tool/paths"
+	"github.com/google/uuid"
 )
 
 // Repository provides atomic, mutex-protected access to data.json.
@@ -20,6 +21,7 @@ type Repository struct {
 	dataPath   string
 	data       Data
 	logger     func(format string, args ...interface{})
+	databaseID string
 }
 
 // New creates a new repository, loading existing data or initializing defaults.
@@ -32,7 +34,28 @@ func New(appDataDir string, logger func(format string, args ...interface{})) (*R
 	if err := r.loadOrInit(); err != nil {
 		return nil, fmt.Errorf("init repo: %w", err)
 	}
+	idPath := filepath.Join(appDataDir, "database-id")
+	b, err := os.ReadFile(idPath)
+	if os.IsNotExist(err) {
+		b = []byte(uuid.NewString())
+		err = os.WriteFile(idPath, b, 0600)
+	}
+	if err != nil {
+		return nil, err
+	}
+	r.databaseID = strings.TrimSpace(string(b))
+	if _, err := uuid.Parse(r.databaseID); err != nil {
+		return nil, fmt.Errorf("invalid database identity: %w", err)
+	}
 	return r, nil
+}
+
+func (r *Repository) DatabaseID() string { return r.databaseID }
+
+func (r *Repository) Flush() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.atomicWrite()
 }
 
 // AppDataDir returns the application data directory.
@@ -52,10 +75,21 @@ func (r *Repository) Read(fn func(*Data)) {
 func (r *Repository) Write(fn func(*Data) error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err := fn(&r.data); err != nil {
+	// Failed disk writes must not leave a phantom success in server memory.
+	before, err := json.Marshal(r.data)
+	if err != nil {
 		return err
 	}
-	return r.atomicWrite()
+	restore := func() { r.data = Data{}; _ = json.Unmarshal(before, &r.data) }
+	if err := fn(&r.data); err != nil {
+		restore()
+		return err
+	}
+	if err := r.atomicWrite(); err != nil {
+		restore()
+		return err
+	}
+	return nil
 }
 
 // SnapshotData returns the current data encoded as indented JSON.
@@ -91,12 +125,7 @@ func (r *Repository) loadOrInit() error {
 		} else {
 			r.logger("corrupted data.json backed up to %s", backupName)
 		}
-		r.data = Data{
-			DormSongs:      []models.Song{},
-			BroadcastSongs: []models.Song{},
-			Settings:       DefaultSettings(),
-		}
-		return r.atomicWrite()
+		return fmt.Errorf("data.json 损坏，已停止加载，原文件未覆盖：%w", err)
 	}
 
 	if r.data.DormSongs == nil {
@@ -125,24 +154,8 @@ func (r *Repository) loadOrInit() error {
 		r.logger("seeded %d default time slots for legacy data file", len(r.data.Settings.TimeSlots))
 	}
 
-	// Migrate legacy broadcast songs without a period field.
-	migrated := false
-	for i := range r.data.BroadcastSongs {
-		if strings.TrimSpace(r.data.BroadcastSongs[i].Period) == "" {
-			if r.data.BroadcastSongs[i].CreatedAt.Hour() < 12 {
-				r.data.BroadcastSongs[i].Period = "noon"
-			} else {
-				r.data.BroadcastSongs[i].Period = "afternoon"
-			}
-			migrated = true
-		}
-	}
-	if migrated {
-		if err := r.atomicWrite(); err != nil {
-			return fmt.Errorf("migrate broadcast periods: %w", err)
-		}
-		r.logger("migrated broadcast song periods")
-	}
+	// Missing historical periods remain unknown. Creation time is only a UI
+	// suggestion, never proof of the intended broadcast slot.
 
 	r.logger("data.json loaded: %d dorm, %d broadcast songs",
 		len(r.data.DormSongs), len(r.data.BroadcastSongs))
@@ -155,7 +168,19 @@ func (r *Repository) atomicWrite() error {
 	if err != nil {
 		return fmt.Errorf("marshal data: %w", err)
 	}
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	closeErr := f.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		return fmt.Errorf("write tmp file: %w", err)
 	}
 	if err := os.Rename(tmpPath, r.dataPath); err != nil {

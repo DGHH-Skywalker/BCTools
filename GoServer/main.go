@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,9 +62,18 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	var (
-		devMode = flag.Bool("dev", false, "开发模式：替换已有后端")
+		devMode       = flag.Bool("dev", false, "开发模式：替换已有后端")
+		dataSource    = flag.String("data-source", "", "首次迁移的旧数据目录（必须含 data.json）")
+		launchVersion = flag.String("launch-version", "", "内部启动校验版本")
+		registerOnly  = flag.Bool("register-only", false, "仅登记程序版本")
+		noBrowser     = flag.Bool("no-browser", false, "不自动打开浏览器")
+		portOverride  = flag.Int("port", 0, "指定诊断监听端口")
 	)
 	flag.Parse()
+	if *launchVersion != "" && launcher.CompareVersions(*launchVersion, version.Version) != 0 {
+		platform.ShowError("程序资源版本与运行版本不一致，已停止跳转；请重新下载完整程序")
+		return
+	}
 
 	// 解析 ldflags 注入的端口与无痕模式
 	port, err := strconv.Atoi(portStr)
@@ -71,18 +81,19 @@ func main() {
 		port = 1743
 	}
 	ephemeralMode, _ = strconv.ParseBool(ephemeralStr)
+	if *portOverride > 0 && *portOverride <= 65535 {
+		port = *portOverride
+	}
 
-	// 5.7.0 起数据全部落在 exe 同目录的 BctoolData 下，迁移只需拷贝该目录。
-	// 旧版 %APPDATA%\BroadcastTool 首次启动时自动迁入（原目录保留作备份）。
+	// 5.9: per-user fixed directory; never silently replace a conflicting database.
 	appDataDir, err := paths.GetDataRootDir()
 	if err != nil {
 		log.Fatalf("Cannot resolve data root dir: %v", err)
 	}
 	migratedLegacy := false
-	if !ephemeralMode {
-		migratedLegacy = services.PrepareLegacyMigration(appDataDir, func(format string, args ...interface{}) {
-			log.Printf(format, args...)
-		})
+	if *devMode {
+		appDataDir = filepath.Join(os.TempDir(), "BCTools-development")
+		port = 1746 // never replace a production backend during development
 	}
 
 	if ephemeralMode {
@@ -92,40 +103,108 @@ func main() {
 		log.Printf("一次性测试版：端口 %d，临时数据目录 %s（退出后清理）", port, appDataDir)
 	}
 
-	running := launcher.IsBackendRunning(port)
-
-	// 一次性测试版：若端口被占用，直接结束占用进程
-	if ephemeralMode && running {
-		log.Printf("一次性测试版：端口 %d 被占用，尝试结束占用进程", port)
-		if err := launcher.KillExistingBackend(port); err != nil {
-			log.Printf("Failed to kill existing backend: %v", err)
-		}
-		if !launcher.WaitForPortFree(port, 10*time.Second) {
-			log.Fatalf("Port %d is still in use after cleanup", port)
-		}
-		running = false
-	}
-
-	// 普通模式：后端已存在则只打开浏览器并退出
-	if !*devMode && running {
-		url := fmt.Sprintf("http://localhost:%d/", port)
-		if err := platform.OpenBrowser(url); err != nil {
-			log.Printf("Failed to open browser: %v", err)
-		}
+	failStartup := func(err error) { platform.ShowError(err.Error()); log.Print(err) }
+	launchLock, err := launcher.AcquireLock(appDataDir + ":startup")
+	if err != nil {
+		failStartup(err)
 		return
 	}
-
-	// 开发模式：强制替换已有后端
-	if *devMode && running {
-		if err := launcher.KillExistingBackend(port); err != nil {
-			log.Printf("Failed to kill existing backend: %v", err)
+	defer launchLock.Close()
+	executable, err := os.Executable()
+	if err != nil {
+		failStartup(err)
+		return
+	}
+	candidates := services.LegacyCandidates(executable)
+	if !ephemeralMode && !*devMode {
+		if _, err := launcher.DiscoverVersions(filepath.Dir(appDataDir), executable); err != nil {
+			failStartup(err)
+			return
 		}
-		if !launcher.WaitForPortFree(port, 10*time.Second) {
-			log.Fatalf("Port %d is still in use after cleanup", port)
+		best, installs, err := launcher.RegisterVersion(filepath.Dir(appDataDir), executable, version.Version)
+		if err != nil {
+			failStartup(err)
+			return
+		}
+		for _, install := range installs {
+			candidates = append(candidates, filepath.Join(filepath.Dir(install.Source), "BctoolData"))
+			for _, source := range install.Sources {
+				candidates = append(candidates, filepath.Join(filepath.Dir(source), "BctoolData"))
+			}
+		}
+		if *registerOnly {
+			return
+		}
+		if launcher.CompareVersions(best.Version, version.Version) > 0 {
+			launchLock.Close()
+			args := append(append([]string{}, os.Args[1:]...), "--launch-version", best.Version)
+			if err := platform.Command(best.Path, args...).Start(); err != nil {
+				failStartup(err)
+			}
+			return
+		}
+	}
+	runningPort := launcher.FindRunningPort(appDataDir, port)
+	if launcher.IsBackendRunning(runningPort) {
+		info, err := launcher.RunningInfo(runningPort)
+		if err != nil {
+			failStartup(err)
+			return
+		}
+		if info.DataDirectory != "" && !strings.EqualFold(filepath.Clean(info.DataDirectory), filepath.Clean(appDataDir)) {
+			failStartup(fmt.Errorf("端口被另一个数据目录的实例占用，未终止它：%s", info.DataDirectory))
+			return
+		}
+		if launcher.CompareVersions(info.Version, version.Version) >= 0 {
+			if !*noBrowser {
+				_ = platform.OpenBrowser(fmt.Sprintf("http://localhost:%d/", runningPort))
+			}
+			return
+		}
+		if err := launcher.StopSafely(runningPort); err != nil {
+			failStartup(err)
+			return
+		}
+	}
+	// Held until the process exits, not merely until the HTTP listener closes.
+	dataLock, err := launcher.AcquireLock(appDataDir + ":data")
+	if err != nil {
+		failStartup(err)
+		return
+	}
+	defer dataLock.Close()
+	if !ephemeralMode && !*devMode {
+		if err := services.PrepareFixedData(appDataDir, candidates, *dataSource); err != nil {
+			if conflict, ok := err.(*services.DataConflictError); ok {
+				options := []string{}
+				for _, source := range conflict.Sources {
+					options = append(options, source.Description())
+				}
+				index, chooseErr := platform.SelectOption("选择首次迁移的歌单来源", options)
+				if chooseErr != nil {
+					failStartup(chooseErr)
+					return
+				}
+				if err = services.PrepareFixedData(appDataDir, candidates, conflict.Sources[index].Directory); err != nil {
+					failStartup(err)
+					return
+				}
+			} else {
+				failStartup(err)
+				return
+			}
+		}
+		if err := services.RecordDataSources(appDataDir, candidates); err != nil {
+			failStartup(err)
+			return
 		}
 	}
 
-	shutdown := runBackend(appDataDir, port, true, migratedLegacy)
+	shutdown := runBackend(appDataDir, port, !*noBrowser, migratedLegacy)
+	if err := launcher.WriteRuntime(appDataDir, port); err != nil {
+		log.Printf("运行实例登记失败：%v", err)
+	}
+	launchLock.Close()
 
 	// 主 goroutine 交给托盘：systray 在 init() 里 LockOSThread，
 	// 消息循环只能跑在启动它的那个 OS 线程上。
@@ -249,9 +328,22 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 			requestShutdown()
 		}
 	})
+	r.Use(lifecycle.MutationGate)
+	songHandler := handlers.NewSongHandler(songStore, snapshotStore, library)
+	lifecycle.SetPersistence(repo.DatabaseID(), func(ctx context.Context) error {
+		if err := songHandler.WaitForPersistence(ctx); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return repo.Flush()
+	})
+	lifecycle.Port = port
+	lifecycle.DataDirectory = appDataDir
 
 	routes.RegisterRoutes(r, routes.HandlerSet{
-		Songs:     handlers.NewSongHandler(songStore, snapshotStore, library),
+		Songs:     songHandler,
 		Files:     handlers.NewFileHandler(appDataDir, conv, library),
 		Auth:      handlers.NewAuthHandler(settingsStore),
 		Settings:  handlers.NewSettingsHandler(settingsStore, songStore, deletedLogStore, library),
@@ -259,7 +351,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 		Update:    handlers.NewUpdateHandler(settingsStore),
 		UpdateLog: handlers.NewUpdateLogHandler(updateLogService),
 		Network:   handlers.NewNetworkHandler(port),
-		System:    handlers.NewSystemHandler(appDataDir, version.Version),
+		System:    handlers.NewSystemHandler(appDataDir, version.Version, repo),
 		Decrypt:   handlers.NewDecryptHandler(appDataDir, conv),
 		Lifecycle: lifecycle,
 	})
@@ -282,11 +374,15 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("Server listen error: %v", err)
+	}
 
 	launcher.SafeGo("server", func() {
 		log.Printf("小播点歌工具 v%s 已启动: http://localhost:%d", version.Version, port)
 		log.Printf("局域网访问: http://%s:%d", network.GetLocalIP(), port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
 	})
@@ -306,6 +402,12 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 	// 三条路径可能并发触发。
 	var once sync.Once
 	shutdown = func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := lifecycle.PrepareShutdown(ctx); err != nil {
+			platform.ShowError(err.Error())
+			return
+		}
 		once.Do(func() {
 			log.Println("Shutting down...")
 
@@ -319,7 +421,11 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 			defer cancel()
 			if err := server.Shutdown(ctx); err != nil {
 				log.Printf("HTTP shutdown error: %v", err)
+				// MutationGate has already drained and frozen all writes. Force
+				// close only idle/read connections, never an active mutation.
+				_ = server.Close()
 			}
+			songHandler.WaitForSync()
 
 			// 一次性测试版：退出时清理临时数据目录，不留痕迹
 			if ephemeralMode {
@@ -331,21 +437,21 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 					log.Printf("已清理临时数据目录: %s", appDataDir)
 				}
 			}
+			tray.Stop()
 		})
 	}
 	requestShutdown = func() {
 		shutdown()
 		// 前端请求关闭时，托盘消息循环还阻塞在主 goroutine 上，
 		// 需要显式收起托盘，否则进程不会退出。
-		tray.Stop()
 	}
 
 	// 信号退出走同一条关闭路径。
 	launcher.SafeGo("signal-watch", func() {
-		<-quit
-		log.Println("Received termination signal")
-		shutdown()
-		tray.Stop()
+		for range quit {
+			log.Println("Received termination signal")
+			shutdown()
+		}
 	})
 
 	return shutdown

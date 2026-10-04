@@ -146,8 +146,14 @@ function applyToAllDays() {
   }
   for (let day = 1; day <= 7; day++) {
     if (day === selectedDay.value) continue
+    const targets = slotsByDay[day]
+    const used = new Set<string>()
     slotsByDay[day] = source.map((s, i) => ({
-      id: newSlotId(),
+      id: (() => {
+        const matches = targets.filter(old => old.time === s.time && !used.has(old.id))
+        if (matches.length === 1) { used.add(matches[0].id); return matches[0].id }
+        return newSlotId()
+      })(),
       dayIndex: day,
       order: i + 1,
       time: s.time,
@@ -188,6 +194,7 @@ async function doSave(confirmed: boolean) {
       return
     }
     message.success(t("common.save"))
+    buildFromSettings() // adopt reconciled IDs before the next edit/save
   } catch (err: any) {
     message.error(err?.message || "保存失败")
   } finally {

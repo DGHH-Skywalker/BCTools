@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"broadcast-tool/internal/version"
+	"context"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"broadcast-tool/network"
 	"broadcast-tool/response"
+	"github.com/google/uuid"
 )
 
 // LifecycleHandler 收拢与「进程存活 / 退出」相关的端点：健康检查、
@@ -20,6 +24,19 @@ type LifecycleHandler struct {
 	// onShutdownRequest 由 main.go 注入，用于响应前端主动请求退出。
 	// 为 nil 时 /api/shutdown 返回 501。
 	onShutdownRequest func()
+	guard             sync.RWMutex
+	peers             map[string]string
+	preparing         string
+	frozen            bool
+	prepareMu         sync.Mutex
+	peerSeen          map[string]time.Time
+	peerDirty         map[string]bool
+	activeWrites      int
+	dataID            string
+	instanceID        string
+	beforeExit        func(context.Context) error
+	Port              int
+	DataDirectory     string
 }
 
 // NewLifecycleHandler 创建 LifecycleHandler。onShutdownRequest 可为 nil。
@@ -27,7 +44,17 @@ func NewLifecycleHandler(onShutdownRequest func()) *LifecycleHandler {
 	return &LifecycleHandler{
 		closing:           make(chan struct{}),
 		onShutdownRequest: onShutdownRequest,
+		peers:             make(map[string]string),
+		peerSeen:          make(map[string]time.Time),
+		peerDirty:         make(map[string]bool),
+		instanceID:        uuid.NewString(),
 	}
+}
+
+// SetPersistence is wired before requests are served. beforeExit waits for all
+// background persistence and verifies a final flushed repository snapshot.
+func (h *LifecycleHandler) SetPersistence(dataID string, beforeExit func(context.Context) error) {
+	h.dataID, h.beforeExit = dataID, beforeExit
 }
 
 // NotifyClosing 广播「后端即将退出」。可安全重复调用。
@@ -38,7 +65,8 @@ func (h *LifecycleHandler) NotifyClosing() {
 
 // HandleHealth 返回后端存活状态。
 func (h *LifecycleHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
-	response.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	executable, _ := os.Executable()
+	response.WriteJSON(w, http.StatusOK, map[string]interface{}{"status": "ok", "application": "BCTools", "version": version.Version, "handoffProtocol": 2, "pid": os.Getpid(), "executable": executable, "instanceId": h.instanceID, "databaseId": h.dataID, "port": h.Port, "dataDirectory": h.DataDirectory})
 }
 
 // HandleWatch 是长轮询端点：一直挂起，直到后端准备退出才返回。
@@ -57,6 +85,10 @@ func (h *LifecycleHandler) HandleWatch(w http.ResponseWriter, r *http.Request) {
 // HandleShutdown 由前端主动请求退出后端。仅允许来自本机，
 // 避免局域网内任何设备都能关掉服务。
 func (h *LifecycleHandler) HandleShutdown(w http.ResponseWriter, r *http.Request) {
+	if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+r.Host && origin != "https://"+r.Host {
+		response.WriteError(w, 403, "FORBIDDEN", "关闭请求来源不匹配")
+		return
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || !network.IsLocalhost(host) {
 		log.Printf("Shutdown request rejected from %s", r.RemoteAddr)
@@ -68,8 +100,14 @@ func (h *LifecycleHandler) HandleShutdown(w http.ResponseWriter, r *http.Request
 		return
 	}
 	log.Println("Shutdown requested via API")
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	if err := h.PrepareShutdown(ctx); err != nil {
+		response.WriteError(w, http.StatusConflict, "UNSAVED", err.Error())
+		return
+	}
 	// 先回响应再关闭：否则连接会随服务一起断掉，前端拿不到结果。
-	response.WriteJSON(w, http.StatusOK, map[string]string{"status": "closing"})
+	response.WriteJSON(w, http.StatusOK, map[string]string{"status": "closing", "saved": "true", "instanceId": h.instanceID})
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}

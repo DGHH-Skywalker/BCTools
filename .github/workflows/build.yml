@@ -59,6 +59,9 @@ jobs:
       - name: Frontend and Go tests
         run: npm run test
 
+      - name: Persistence and handoff race checks
+        run: go -C GoServer test -race ./handlers ./services ./internal/repo ./launcher ./store/...
+
       - name: React type check
         run: corepack pnpm --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
 
@@ -159,6 +162,10 @@ jobs:
       - name: Smoke-test silent install and uninstall
         shell: pwsh
         run: ./scripts/test-installer.ps1
+
+      - name: Verify Windows startup and durable version handoff
+        shell: pwsh
+        run: ./scripts/test-startup.ps1
 
       - name: List artifacts
         shell: bash

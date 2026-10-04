@@ -2,11 +2,10 @@
 package main
 
 import (
+	"broadcast-tool/platform"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"syscall"
 )
 
 func main() {
@@ -15,11 +14,7 @@ func main() {
 		dir = filepath.Dir(exe)
 	}
 	target := filepath.Join(dir, "bctools.exe")
-	cmd := exec.Command(target, "-dev")
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-	}
+	cmd := platform.Command(target, "-dev")
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "failed to start bctools.exe:", err)
 		os.Exit(1)

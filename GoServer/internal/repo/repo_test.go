@@ -32,6 +32,26 @@ func TestDefaultTimeSlots(t *testing.T) {
 	}
 }
 
+func TestHistoricalPeriodIsNotGuessedAndDatabaseIdentitySurvivesRestart(t *testing.T) {
+	r, dir := newTestRepo(t)
+	r.Write(func(d *Data) error {
+		d.BroadcastSongs = []models.Song{{ID: 1, Date: "2026-10-04", CreatedAt: time.Date(2026, 10, 4, 7, 0, 0, 0, time.UTC)}}
+		return nil
+	})
+	reopened, err := New(dir, func(string, ...interface{}) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.DatabaseID() != r.DatabaseID() {
+		t.Fatal("database identity changed")
+	}
+	reopened.Read(func(d *Data) {
+		if d.BroadcastSongs[0].Period != "" {
+			t.Fatal("creation time became a broadcast period")
+		}
+	})
+}
+
 // 用户改过的时段必须在重启后保持原样：既不能被默认值“补回”，也不能被替换。
 // 回归此前的 bug：把 06:20 改成 06:10 后重启，06:20 会被 EnsureDefaultTimeSlots 加回来。
 func TestUserModifiedTimeSlotsSurviveRestart(t *testing.T) {
@@ -156,16 +176,13 @@ func TestDataCorruptionRecovery(t *testing.T) {
 		t.Fatalf("write corrupt data: %v", err)
 	}
 
-	r, err := New(dir, func(format string, args ...interface{}) { t.Logf(format, args...) })
-	if err != nil {
-		t.Fatalf("New with corrupt data: %v", err)
+	_, err := New(dir, func(format string, args ...interface{}) { t.Logf(format, args...) })
+	if err == nil {
+		t.Fatal("corrupt data must stop startup, not create an empty database")
 	}
-	var slots []models.TimeSlot
-	r.Read(func(data *Data) {
-		slots = data.Settings.TimeSlots
-	})
-	if len(slots) != 26 {
-		t.Fatalf("expected default settings after corruption recovery")
+	current, _ := os.ReadFile(dataPath)
+	if string(current) != "not json" {
+		t.Fatal("original corrupt file overwritten")
 	}
 
 	// A backup should have been created
@@ -178,5 +195,29 @@ func TestDataCorruptionRecovery(t *testing.T) {
 	}
 	if backups != 1 {
 		t.Fatalf("expected 1 backup, got %d", backups)
+	}
+}
+
+func TestWriteFailureRollsBackMemoryAndDisk(t *testing.T) {
+	r, dir := newTestRepo(t)
+	before, _ := r.SnapshotData()
+	// Force a write failure without relying on chmod (tests may run as root).
+	if err := os.Mkdir(filepath.Join(dir, "data.json.tmp"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	err := r.Write(func(d *Data) error {
+		d.BroadcastSongs = append(d.BroadcastSongs, models.Song{ID: 1, Title: "not committed"})
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected disk failure")
+	}
+	after, _ := r.SnapshotData()
+	if string(before) != string(after) {
+		t.Fatal("failed write leaked into server memory")
+	}
+	onDisk, _ := os.ReadFile(filepath.Join(dir, "data.json"))
+	if string(before) != string(onDisk) {
+		t.Fatal("disk data changed")
 	}
 }
