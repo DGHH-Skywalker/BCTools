@@ -206,7 +206,8 @@ jobs:
           foreach ($name in @("bctools.exe", "BCTools-Setup.exe")) {
             $info = (Get-Item (Join-Path dist $name)).VersionInfo
             $actual = "$($info.FileMajorPart).$($info.FileMinorPart).$($info.FileBuildPart).$($info.FilePrivatePart)"
-            if ($actual -ne $expected -or $info.FileVersion -ne $expected -or $info.ProductVersion -ne $version) {
+            # Inno reserves extra space in these textual version values.
+            if ($actual -ne $expected -or ([string]$info.FileVersion).TrimEnd() -ne $expected -or ([string]$info.ProductVersion).TrimEnd() -ne $version) {
               throw "$name has unexpected versions: $actual / $($info.FileVersion) / $($info.ProductVersion)"
             }
           }

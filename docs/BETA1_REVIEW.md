@@ -20,7 +20,7 @@
 | 项目 | 现状 |
 | --- | --- |
 | 旧 LAN 管理接口 | 原有管理路由仍保留 LAN 可访问性及宽松 CORS。已有设置、快照和文件操作可被能连接该端口的主机调用。新增更新、缓存和插件管理走本机校验。相关实现见 [路由](../GoServer/routes/routes.go) 和 [CORS](../GoServer/middleware/middleware.go)。 |
-| Windows 真机行为 | Linux 可交叉编译 Windows EXE，并检查 PE 中的固定数字版本和版本字符串。真机的 WebView2 窗口、保存对话框、播放拖动、已安装版更新失败后的回滚及 Inno Setup 安装仍需 Windows 执行。Actions 安装检查已写入工作流，未在远端运行。 |
+| Windows 验证 | GitHub Actions 的 Windows 环境已验证 Inno Setup 安装、浏览器后端启动和退出、重装与卸载。WebView2 窗口、保存对话框、播放拖动及已安装版更新失败后的回滚仍需交互式 Windows 验证。 |
 | 合并音频 I/O | WebView2 音频单次 Range 响应限制为 4 MiB。合并文件的单曲试听直接读取原始 ID3 标签和文件字节区间，单测覆盖跨区间 Seek。播放拖动和长文件续读仍需 WebView2 真机验证。相关实现见 [音频定位](../GoServer/services/musiclibrary.go) 和 [播放接口](../GoServer/handlers/files.go)。 |
 | 数据降级 | 旧版程序读取的是单体 `data.json`。直接启动旧版无法读取新版拆分后的完整歌单，升级前的全量快照可用作降级依据。迁移时保留的 v1 数据备份随清理策略保存七天。 |
 | 生产更新与境内连通 | 示例源 `OWNER/REPO` 等待生产仓库和签名根。测试使用本地签名和镜像故障注入。生产镜像和中国大陆实际网络可用性尚待验收。 |
