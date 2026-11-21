@@ -64,7 +64,9 @@ var (
 func main() {
 	if err := run(); err != nil {
 		log.Print(err)
-		if !slices.Contains(os.Args[1:], "--shutdown") {
+		if !slices.ContainsFunc(os.Args[1:], func(arg string) bool {
+			return arg == "--shutdown" || arg == "-shutdown" || arg == "--dev" || arg == "-dev"
+		}) {
 			showLaunchError(err.Error())
 		}
 		os.Exit(1)
