@@ -12,6 +12,9 @@ FFMPEG_COMMIT="e3a61e91030696348b56361bdf80ea358aef4a19"
 FFMPEG_OFFICIAL="https://github.com/FFmpeg/FFmpeg.git"
 FFMPEG_MIRROR_GITEE="https://gitee.com/mirrors/ffmpeg.git"
 FFMPEG_MIRROR_PROXY="https://ghproxy.com/https://github.com/FFmpeg/FFmpeg.git"
+LAME_VERSION="3.100-3"
+LAME_PACKAGE_SHA256="6bc4bf7d2f39a941a695b228818a8c846a53c43c20117e0707e08977b0dd0da9"
+LAME_SOURCE_SHA256="dfd51143ea25aa0b67f5d355127b8a89a27379b1b128f0b2f9eed7c3327656ab"
 
 mkdir -p "$SRC_DIR" "$DIST_DIR"
 
@@ -39,6 +42,17 @@ fi
 # 注意：MP4/M4A 解复用器在 ffmpeg 里的名字就是带逗号的这一串
 MOV_DEMUXER='mov,mp4,m4a,3gp,3g2,mj2'
 
+# LAME 4.0 adds a static dependency on mpg123. Use a pinned UCRT64
+# archive for FFmpeg 7.0.2 and keep the system package set untouched.
+work_dir="$(mktemp -d)"
+trap 'rm -rf "$work_dir"' EXIT
+lame_pkg="mingw-w64-ucrt-x86_64-lame-$LAME_VERSION-any.pkg.tar.zst"
+curl --fail --location --retry 3 --max-time 90 \
+    "https://repo.msys2.org/mingw/ucrt64/$lame_pkg" -o "$work_dir/$lame_pkg"
+printf '%s  %s\n' "$LAME_PACKAGE_SHA256" "$work_dir/$lame_pkg" | sha256sum -c -
+tar -xf "$work_dir/$lame_pkg" -C "$work_dir" ucrt64/include/lame ucrt64/lib/libmp3lame.a
+lame_prefix="$(cygpath -m "$work_dir/ucrt64")"
+
 PKG_CONFIG_PATH="/ucrt64/lib/pkgconfig:$PKG_CONFIG_PATH" \
 ./configure \
   --prefix="$DIST_DIR" \
@@ -48,8 +62,8 @@ PKG_CONFIG_PATH="/ucrt64/lib/pkgconfig:$PKG_CONFIG_PATH" \
   --cxx=x86_64-w64-mingw32-g++ \
   --pkg-config=pkg-config \
   --pkg-config-flags="--static" \
-  --extra-cflags="-O3" \
-  --extra-ldflags="-static" \
+  --extra-cflags="-O3 -I$lame_prefix/include" \
+  --extra-ldflags="-static -L$lame_prefix/lib" \
   --extra-libs="-lm" \
   --enable-static \
   --disable-shared \
@@ -104,14 +118,14 @@ rm -rf "$DIST_DIR/bin" "$DIST_DIR/include" "$DIST_DIR/lib" "$DIST_DIR/share"
 
 # 发布时把对应源码、构建脚本和许可证与二进制一起提供。
 if [ "${BCTOOLS_PACKAGE_FFMPEG_SOURCE:-}" = "1" ]; then
-    source_bundle="$(mktemp -d)"
-    trap 'rm -rf "$source_bundle"' EXIT
+    source_bundle="$work_dir/sources"
+    mkdir "$source_bundle"
     git archive --format=tar.gz --prefix="ffmpeg-$FFMPEG_TAG/" \
         -o "$source_bundle/ffmpeg-$FFMPEG_TAG.tar.gz" "$FFMPEG_COMMIT"
-    lame_version="$(pacman -Q mingw-w64-ucrt-x86_64-lame | cut -d ' ' -f 2)"
-    lame_archive="mingw-w64-lame-$lame_version.src.tar.zst"
+    lame_archive="mingw-w64-lame-$LAME_VERSION.src.tar.zst"
     curl --fail --location --retry 3 --max-time 90 \
         "https://repo.msys2.org/mingw/sources/$lame_archive" -o "$source_bundle/$lame_archive"
+    printf '%s  %s\n' "$LAME_SOURCE_SHA256" "$source_bundle/$lame_archive" | sha256sum -c -
     tar -tf "$source_bundle/$lame_archive" > /dev/null
     cp "$SRC_DIR/COPYING"* "$ROOT_DIR/build.sh" "$ROOT_DIR/README.md" "$source_bundle/"
     tar -czf "$DIST_DIR/FFmpeg-Sources.tar.gz" -C "$source_bundle" .

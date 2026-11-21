@@ -29,8 +29,7 @@ Windows + MSYS2 UCRT64：
 pacman -Syu
 pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain \
   mingw-w64-ucrt-x86_64-nasm \
-  mingw-w64-ucrt-x86_64-lame \
-  git make pkg-config
+  curl zstd git make pkg-config
 ```
 
 > 国内用户建议先把 MSYS2 源换成清华镜像，再安装依赖。
@@ -50,6 +49,8 @@ dist/
 ├── ffprobe.exe
 └── COPYING.*
 ```
+
+构建脚本会校验固定版本的 UCRT64 LAME 静态库，并在临时目录中使用。
 
 ## 集成到 BroadcastTool
 

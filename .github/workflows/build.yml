@@ -100,7 +100,8 @@ jobs:
             base-devel
             mingw-w64-ucrt-x86_64-toolchain
             mingw-w64-ucrt-x86_64-nasm
-            mingw-w64-ucrt-x86_64-lame
+            curl
+            zstd
             git
             make
             pkg-config
@@ -111,7 +112,11 @@ jobs:
         working-directory: GoServer/ffmpeg_bctools_mini
         env:
           BCTOOLS_PACKAGE_FFMPEG_SOURCE: '1'
-        run: bash build.sh
+        run: |
+          if ! bash build.sh; then
+            if [ -f src/ffmpeg/ffbuild/config.log ]; then tail -160 src/ffmpeg/ffbuild/config.log; fi
+            exit 1
+          fi
 
       - name: Validate bundled FFmpeg
         shell: bash
