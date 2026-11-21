@@ -239,7 +239,7 @@ func (s *SongStore) AddSong(req models.CreateSongRequest) (models.Song, error) {
 	err := s.repo.Write(func(data *repo.Data) error {
 		// 同一宿舍时段允许放置多首歌曲，不再做冲突校验。
 
-		var maxID int64
+		maxID := max(0, data.NextSongID-1)
 		for _, song := range data.DormSongs {
 			if song.ID > maxID {
 				maxID = song.ID
@@ -433,6 +433,7 @@ func (s *SongStore) GetSongsAssignedToTimeSlotIDs(ids map[string]bool) []models.
 func (s *SongStore) GetNextID() int64 {
 	var maxID int64
 	s.repo.Read(func(data *repo.Data) {
+		maxID = max(0, data.NextSongID-1)
 		for _, song := range data.DormSongs {
 			if song.ID > maxID {
 				maxID = song.ID

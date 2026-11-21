@@ -45,6 +45,11 @@ const routes: RouteRecordRaw[] = [
       { path: "guide", component: () => import("../views/Guide.vue"), meta: { title: "软件指南" } },
     ],
   },
+  {
+    path: "/plugins/:plugin/:page",
+    component: AppLayout,
+    children: [{ path: "", component: () => import("../views/PluginPage.vue") }],
+  },
   { path: "/about-software", redirect: "/settings" },
   { path: "/guide", redirect: "/settings/guide" },
   {

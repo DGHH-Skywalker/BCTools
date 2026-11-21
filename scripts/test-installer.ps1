@@ -15,6 +15,33 @@ $uninstaller = Join-Path $installDir "unins000.exe"
 if (-not (Test-Path -LiteralPath $app)) { throw "Installed executable is missing" }
 if (-not (Test-Path -LiteralPath $uninstaller)) { throw "Uninstaller is missing" }
 
+# Start the packaged browser backend without opening a browser on the runner.
+$backend = Start-Process -FilePath $app -ArgumentList "--dev" -PassThru -WindowStyle Hidden
+try {
+  $ready = $false
+  for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    if ($backend.HasExited) { throw "Installed backend exited before becoming ready" }
+    try {
+      $response = Invoke-WebRequest -Uri "http://localhost:1743/api/health" -TimeoutSec 2
+      $ready = $response.StatusCode -eq 200
+      if ($ready) { break }
+    } catch {
+      Start-Sleep -Milliseconds 250
+    }
+  }
+  if (-not $ready) { throw "Installed backend health check timed out" }
+  foreach ($path in @("/", "/um-react/", "/api/v1/openapi.json")) {
+    $response = Invoke-WebRequest -Uri "http://localhost:1743$path" -TimeoutSec 5
+    if ($response.StatusCode -ne 200) { throw "Packaged endpoint $path failed" }
+  }
+  Run-Checked $app @("--shutdown")
+  if (-not $backend.WaitForExit(30000) -or $backend.ExitCode -ne 0) {
+    throw "Installed backend did not shut down cleanly"
+  }
+} finally {
+  if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
+}
+
 # Running the same package exercises repair/reinstall and stable shortcut paths.
 Run-Checked $setup $setupArgs
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "小播点歌工具.lnk"

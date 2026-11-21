@@ -38,17 +38,13 @@ function run(cmd, opts = {}) {
 }
 
 function findPnpm() {
-  // 1) 直接 pnpm（全局安装）
-  const r = spawnSync("pnpm", ["--version"], { stdio: "pipe", encoding: "utf8", shell: true })
-  if (r.status === 0) return { cmd: "pnpm", args: [] }
-  // 2) corepack pnpm（不需要管理员写到 Program Files）。
-  const r2 = spawnSync("corepack", ["pnpm", "--version"], {
-    stdio: "pipe",
-    encoding: "utf8",
-    shell: true,
-  })
-  if (r2.status === 0) return { cmd: "corepack", args: ["pnpm"] }
-  fail("未找到 pnpm。请先 npm i -g pnpm，或保证 corepack 可用。")
+  const packageManager = JSON.parse(fs.readFileSync(path.join(UM, "package.json"), "utf8")).packageManager
+  if (!/^pnpm@[0-9]+\.[0-9]+\.[0-9]+$/.test(packageManager || "")) fail("um-react 未固定 pnpm 版本")
+  const corepack = spawnSync("corepack", [packageManager, "--version"], { cwd: UM, shell: true, encoding: "utf8" })
+  if (corepack.status === 0) return { cmd: "corepack", args: [packageManager] }
+  const installed = spawnSync("pnpm", ["--version"], { cwd: UM, shell: true, encoding: "utf8" })
+  if (installed.status === 0 && installed.stdout.trim() === packageManager.slice(5)) return { cmd: "pnpm", args: [] }
+  fail("需要 " + packageManager + " 或 Corepack")
 }
 
 if (!fs.existsSync(path.join(UM, "package.json"))) {
@@ -58,53 +54,18 @@ if (!fs.existsSync(path.join(UM, "package.json"))) {
 const pnpm = findPnpm()
 const pnpmArgs = (...rest) => [...pnpm.args, ...rest]
 
-// um-react 自己的 package.json 里 build 末尾会再调一次 `pnpm build:finalize`。
-// 我们这里只暴露 corepack pnpm 给 PATH，um-react 的脚本里 `pnpm ...` 就解析
-// 不到。解决办法：把 corepack 自身的路径加到 PATH，并塞一个 pnpm.cmd shim 到
-// 当前 PATH 里的可写目录。
-function ensurePnpmShim() {
-  if (pnpm.cmd === "pnpm") return {} // 已有真 pnpm，无需 shim
-  // 找 corepack 所在目录（C:\Program Files\nodejs）
-  const which = spawnSync("corepack", [], { stdio: "pipe", encoding: "utf8", shell: true })
-  // 用 cmd where 找
-  const where = spawnSync("cmd", ["/c", "where", "corepack"], {
-    stdio: "pipe",
-    encoding: "utf8",
-    shell: true,
-  })
-  const corepackPath = (where.stdout || "").split(/\r?\n/)[0]?.trim()
-  if (!corepackPath) return {}
-  const corepackDir = path.dirname(corepackPath)
-  // 写一个 pnpm.cmd 到 .corepack-shims/
-  const shimDir = path.join(ROOT, ".corepack-shims")
-  fs.mkdirSync(shimDir, { recursive: true })
-  const shim = path.join(shimDir, "pnpm.cmd")
-  fs.writeFileSync(
-    shim,
-    `@echo off\r\n"${corepackPath}" pnpm %*\r\n`,
-    "utf8",
-  )
-  // 同时也写个 pnpm（无扩展名）给 bash 找
-  fs.writeFileSync(
-    path.join(shimDir, "pnpm"),
-    `#!/bin/sh\nexec "${corepackPath}" pnpm "$@"\n`,
-    "utf8",
-  )
-  log(`  pnpm shim: ${shimDir}`)
-  return { PATH: shimDir + path.delimiter + (process.env.PATH || "") }
-}
-const extraEnv = ensurePnpmShim()
-
 if (!skipInstall && !fs.existsSync(path.join(UM, "node_modules"))) {
   log("安装 um-react 依赖 (pnpm install)...")
-  run(pnpm.cmd, { args: pnpmArgs("install", "--no-frozen-lockfile"), cwd: UM, env: extraEnv })
+  run(pnpm.cmd, { args: pnpmArgs("install", "--frozen-lockfile"), cwd: UM })
 } else if (fs.existsSync(path.join(UM, "node_modules"))) {
   log("node_modules 已存在，跳过 install")
 }
 
 if (!skipBuild) {
   log("构建 um-react (pnpm build)...")
-  run(pnpm.cmd, { args: pnpmArgs("build"), cwd: UM, env: extraEnv })
+  run(pnpm.cmd, { args: pnpmArgs("exec", "tsc", "-p", "tsconfig.prod.json"), cwd: UM })
+  run(pnpm.cmd, { args: pnpmArgs("exec", "vite", "build"), cwd: UM })
+  run(process.execPath, { args: ["scripts/write-version.mjs"], cwd: UM, shell: false })
 }
 
 if (!fs.existsSync(path.join(DIST, "index.html"))) {

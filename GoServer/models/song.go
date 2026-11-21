@@ -4,18 +4,19 @@ import "time"
 
 // Song represents a song entry in the playlist
 type Song struct {
-	ID         int64     `json:"id"`
-	Type       string    `json:"type,omitempty"` // not persisted, determined by array
-	Date       string    `json:"date"`
-	Weekday    string    `json:"weekday,omitempty"` // computed, not persisted
-	Title      string    `json:"title"`
-	Artist     string    `json:"artist"`
-	Remark     string    `json:"remark"`
-	FilePath   string    `json:"filePath"`
-	TimeSlotID *string   `json:"timeSlotId"` // null = unassigned
-	CreatedAt  time.Time `json:"createdAt"`
-	Period     string    `json:"period,omitempty"` // broadcast: "noon" | "afternoon"
-	Order      int       `json:"order,omitempty"`  // within-slot drag order (dorm)
+	RetentionHoldUntil string    `json:"retentionHoldUntil,omitempty"`
+	ID                 int64     `json:"id"`
+	Type               string    `json:"type,omitempty"` // not persisted, determined by array
+	Date               string    `json:"date"`
+	Weekday            string    `json:"weekday,omitempty"` // computed, not persisted
+	Title              string    `json:"title"`
+	Artist             string    `json:"artist"`
+	Remark             string    `json:"remark"`
+	FilePath           string    `json:"filePath"`
+	TimeSlotID         *string   `json:"timeSlotId"` // null = unassigned
+	CreatedAt          time.Time `json:"createdAt"`
+	Period             string    `json:"period,omitempty"` // broadcast: "noon" | "afternoon"
+	Order              int       `json:"order,omitempty"`  // within-slot drag order (dorm)
 }
 
 // ReorderSongsRequest carries the desired song ID sequence within a slot.

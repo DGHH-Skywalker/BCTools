@@ -33,6 +33,7 @@ import { computed, h, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import type { MenuOption } from "naive-ui"
 import { Calendar, Export, GuideBoard, Setting, Broadcast, Left } from "@icon-park/vue-next"
+import { openDesktopWindow, runsInDesktop } from "../utils/desktop"
 const route = useRoute(); const router = useRouter()
 const collapsed = ref(false)
 const iconProps = { theme: "outline" as const, size: 18, strokeWidth: 3 }
@@ -45,6 +46,10 @@ const menuOptions = computed<MenuOption[]>(() => [
 ])
 function navigate(path: string) { router.push(path) }
 function returnToApp() {
+  if (runsInDesktop()) {
+    void openDesktopWindow("main").catch(() => router.push("/home"))
+    return
+  }
   if (window.opener && !window.opener.closed) {
     window.opener.focus()
     window.close()

@@ -46,6 +46,7 @@ export interface Settings {
 }
 
 export interface NetworkInfo {
+  error?: string
   ip: string
   port: number
   url: string

@@ -12,8 +12,9 @@
   <div v-else class="mobile-content">
     <n-card class="mobile-card" :title="t('mobile.appUrlTitle')">
       <n-space vertical align="center">
-        <n-text code class="mobile-url">{{ networkInfo?.url || '...' }}</n-text>
-        <img v-if="networkInfo" class="mobile-qr" :src="`/api/network/qr?t=${qrTs}`" alt="App QR" />
+        <n-alert v-if="networkInfo?.error" type="warning">局域网服务未启动。{{ networkInfo.error }}</n-alert>
+        <n-text v-else code class="mobile-url">{{ networkInfo?.url || '...' }}</n-text>
+        <img v-if="networkInfo?.url" class="mobile-qr" :src="`/api/network/qr?t=${qrTs}`" alt="App QR" />
         <n-text depth="3" class="mobile-tip">{{ t('mobile.sameNetworkTip') }}</n-text>
         <n-button v-if="showHotspotSettings" type="primary" @click="openHotspotSettings">
           {{ t('mobile.openHotspotSettings') }}

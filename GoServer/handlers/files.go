@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,8 +11,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"broadcast-tool/converter"
+	"broadcast-tool/internal/requestscope"
 	"broadcast-tool/models"
 	"broadcast-tool/paths"
 	"broadcast-tool/response"
@@ -42,10 +45,11 @@ func NewFileHandler(appDataDir string, c *converter.FFMpegConverter, library *se
 
 func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 512<<20)
-	if err := r.ParseMultipartForm(512 << 20); err != nil {
+	if err := r.ParseMultipartForm(4 << 20); err != nil {
 		response.WriteValidationError(w, "文件过大")
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		response.WriteValidationError(w, "请上传文件")
@@ -73,19 +77,21 @@ func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "保存文件失败")
 		return
 	}
-	io.Copy(out, file)
-	out.Close()
+	defer os.Remove(inputPath)
+	_, err = io.Copy(out, file)
+	if err := errors.Join(err, out.Close()); err != nil {
+		response.WriteInternalError(w, "保存文件失败")
+		return
+	}
 
 	outputPath := filepath.Join(stagingDir, id+".mp3")
 	result, err := h.Converter.ProcessFile(inputPath, outputPath)
 	if err != nil {
-		os.Remove(inputPath)
 		os.Remove(outputPath)
 		code := classifyConversionError(err)
 		response.WriteError(w, http.StatusInternalServerError, code, "音频转换失败")
 		return
 	}
-	os.Remove(inputPath)
 	response.WriteJSON(w, http.StatusOK, models.FileProcessResponse{
 		TempFileName: id + ".mp3",
 		Title:        result.Title,
@@ -95,10 +101,11 @@ func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 512<<20)
-	if err := r.ParseMultipartForm(512 << 20); err != nil {
+	if err := r.ParseMultipartForm(4 << 20); err != nil {
 		response.WriteValidationError(w, "文件过大")
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		response.WriteValidationError(w, "请上传文件")
@@ -124,13 +131,19 @@ func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "保存文件失败")
 		return
 	}
-	io.Copy(out, file)
-	out.Close()
+	defer os.Remove(inputPath)
+	_, err = io.Copy(out, file)
+	if err := errors.Join(err, out.Close()); err != nil {
+		response.WriteInternalError(w, "保存文件失败")
+		return
+	}
 
 	outputPath := filepath.Join(stagingDir, id+".mp3")
 	result, err := h.Converter.StashFile(inputPath, outputPath)
 	if err != nil {
-		result = converter.ProbeResult{}
+		os.Remove(outputPath)
+		response.WriteError(w, http.StatusInternalServerError, classifyConversionError(err), "音频暂存失败")
+		return
 	}
 	response.WriteJSON(w, http.StatusOK, models.FileProcessResponse{
 		TempFileName: id + ".mp3",
@@ -343,47 +356,95 @@ func (h *FileHandler) HandleSelectDir(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FileHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
-	// 优先按歌曲 ID 解析：合并文件的成员会抽出自己那一段单独播放；
-	// 没传 songId 时退回旧的 file 路径行为（organize 旧导出路径兼容）。
-	var srcPath string
-	var cleanup func()
 	if songIDStr := r.URL.Query().Get("songId"); songIDStr != "" {
 		id, err := strconv.ParseInt(songIDStr, 10, 64)
 		if err != nil {
 			response.WriteValidationError(w, "songId 参数非法")
 			return
 		}
-		path, cl, err := h.Library.SongAudioPath(id)
+		content, size, modified, closeAudio, err := h.Library.OpenSongAudio(id)
 		if err != nil {
 			response.WriteNotFoundError(w, "歌曲音频不存在")
 			return
 		}
-		srcPath, cleanup = path, cl
-		if cleanup != nil {
-			defer cleanup()
-		}
-	} else {
-		filename := r.URL.Query().Get("file")
-		if filename == "" {
-			response.WriteValidationError(w, "file 参数不能为空")
-			return
-		}
-		resolved, err := h.validateSourcePath(filename)
-		if err != nil {
-			response.WriteValidationError(w, "非法文件路径")
-			return
-		}
-		srcPath = resolved
+		defer closeAudio()
+		serveAudio(w, r, content, size, modified)
+		return
 	}
-	info, err := os.Stat(srcPath)
-	if err != nil || info.IsDir() {
+	// Keep the file parameter for the legacy export flow.
+	filename := r.URL.Query().Get("file")
+	if filename == "" {
+		response.WriteValidationError(w, "file 参数不能为空")
+		return
+	}
+	srcPath, err := h.validateSourcePath(filename)
+	if err != nil {
+		response.WriteValidationError(w, "非法文件路径")
+		return
+	}
+	file, err := os.Open(srcPath)
+	if err != nil {
 		response.WriteNotFoundError(w, "文件不存在")
 		return
 	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		response.WriteNotFoundError(w, "文件不存在")
+		return
+	}
+	serveAudio(w, r, file, info.Size(), info.ModTime())
+}
+
+func serveAudio(w http.ResponseWriter, r *http.Request, content io.ReadSeeker, size int64, modified time.Time) {
 	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
 	w.Header().Set("Accept-Ranges", "bytes")
-	http.ServeFile(w, r, srcPath)
+	if requestscope.Desktop(r) {
+		r = boundedAudioRequest(w, r, size)
+		if r == nil {
+			return
+		}
+	}
+	http.ServeContent(w, r, "audio.mp3", modified, content)
+}
+
+// WebView2 buffers each in-process response. Chromium can resume a
+// partial response using the end byte supplied in Content-Range.
+func boundedAudioRequest(w http.ResponseWriter, r *http.Request, size int64) *http.Request {
+	const maxResponse int64 = 4 << 20
+	r = r.Clone(r.Context())
+	for _, key := range []string{"If-Modified-Since", "If-None-Match", "If-Range"} {
+		r.Header.Del(key)
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if size <= maxResponse {
+		return r
+	}
+	raw := r.Header.Get("Range")
+	if raw == "" {
+		raw = "bytes=0-"
+	}
+	part, unit := strings.CutPrefix(raw, "bytes=")
+	first, last, sep := strings.Cut(part, "-")
+	start, err := strconv.ParseInt(first, 10, 64)
+	end := min(start+maxResponse-1, size-1)
+	valid := unit && sep && err == nil && start >= 0 && start < size
+	if first == "" {
+		n, err := strconv.ParseInt(last, 10, 64)
+		valid = unit && sep && err == nil && n > 0
+		start, end = max(0, size-min(n, maxResponse)), size-1
+	} else if last != "" {
+		n, err := strconv.ParseInt(last, 10, 64)
+		valid = valid && err == nil && n >= start
+		end = min(end, n)
+	}
+	if !valid {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
+		http.Error(w, "range not satisfiable", http.StatusRequestedRangeNotSatisfiable)
+		return nil
+	}
+	r.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	return r
 }
 
 func (h *FileHandler) HandleBrowse(w http.ResponseWriter, r *http.Request) {

@@ -3,13 +3,18 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,11 +24,12 @@ import (
 	"broadcast-tool/converter"
 	"broadcast-tool/handlers"
 	"broadcast-tool/internal/binembed"
+	"broadcast-tool/internal/plugins"
 	"broadcast-tool/internal/repo"
+	"broadcast-tool/internal/updates"
 	"broadcast-tool/internal/version"
 	"broadcast-tool/launcher"
 	"broadcast-tool/middleware"
-	"broadcast-tool/network"
 	"broadcast-tool/paths"
 	"broadcast-tool/platform"
 	"broadcast-tool/routes"
@@ -55,99 +61,188 @@ var (
 	ephemeralStr = "false"
 )
 
-var ephemeralMode bool
-
 func main() {
+	if err := run(); err != nil {
+		log.Print(err)
+		if !slices.Contains(os.Args[1:], "--shutdown") {
+			showLaunchError(err.Error())
+		}
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-	var (
-		devMode = flag.Bool("dev", false, "开发模式：替换已有后端")
-	)
+	devMode := flag.Bool("dev", false, "开发模式")
+	shutdownOnly := flag.Bool("shutdown", false, "关闭正在运行的 BCTools")
+	applyUpdate := flag.Bool("apply-staged-update", false, "更新进程")
 	flag.Parse()
+	if *applyUpdate {
+		return updates.RunCoreHelper(version.Version, flag.NArg() == 1 && flag.Arg(0) == "desktop")
+	}
 
-	// 解析 ldflags 注入的端口与无痕模式
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port <= 0 || port > 65535 {
 		port = 1743
 	}
-	ephemeralMode, _ = strconv.ParseBool(ephemeralStr)
-
-	// 5.7.0 起数据全部落在 exe 同目录的 BctoolData 下，迁移只需拷贝该目录。
-	// 旧版 %APPDATA%\BroadcastTool 首次启动时自动迁入（原目录保留作备份）。
-	appDataDir, err := paths.GetDataRootDir()
+	desktop := flag.NArg() == 1 && flag.Arg(0) == "desktop"
+	ephemeral, _ := strconv.ParseBool(ephemeralStr)
+	dataDir, err := paths.GetDataRootDir()
 	if err != nil {
-		log.Fatalf("Cannot resolve data root dir: %v", err)
+		return err
 	}
-	migratedLegacy := false
-	if !ephemeralMode {
-		migratedLegacy = services.PrepareLegacyMigration(appDataDir, func(format string, args ...interface{}) {
-			log.Printf(format, args...)
-		})
-	}
-
-	if ephemeralMode {
-		// 一次性测试版：数据目录放临时目录，绝不触碰 %APPDATA%\BroadcastTool
-		appDataDir = filepath.Join(os.TempDir(), fmt.Sprintf("BCTools-test-%d", os.Getpid()))
-		cleanupStaleEphemeralDirs()
-		log.Printf("一次性测试版：端口 %d，临时数据目录 %s（退出后清理）", port, appDataDir)
-	}
-
-	running := launcher.IsBackendRunning(port)
-
-	// 一次性测试版：若端口被占用，直接结束占用进程
-	if ephemeralMode && running {
-		log.Printf("一次性测试版：端口 %d 被占用，尝试结束占用进程", port)
-		if err := launcher.KillExistingBackend(port); err != nil {
-			log.Printf("Failed to kill existing backend: %v", err)
+	if ephemeral && !*shutdownOnly {
+		dataDir, err = os.MkdirTemp("", "BCTools-test-")
+		if err != nil {
+			return err
 		}
-		if !launcher.WaitForPortFree(port, 10*time.Second) {
-			log.Fatalf("Port %d is still in use after cleanup", port)
-		}
-		running = false
+		defer os.RemoveAll(dataDir)
 	}
-
-	// 普通模式：后端已存在则只打开浏览器并退出
-	if !*devMode && running {
-		url := fmt.Sprintf("http://localhost:%d/", port)
-		if err := platform.OpenBrowser(url); err != nil {
-			log.Printf("Failed to open browser: %v", err)
-		}
-		return
-	}
-
-	// 开发模式：强制替换已有后端
-	if *devMode && running {
-		if err := launcher.KillExistingBackend(port); err != nil {
-			log.Printf("Failed to kill existing backend: %v", err)
-		}
-		if !launcher.WaitForPortFree(port, 10*time.Second) {
-			log.Fatalf("Port %d is still in use after cleanup", port)
+	if desktop {
+		if err := checkDesktop(); err != nil {
+			return err
 		}
 	}
+	if *shutdownOnly {
+		return launcher.SendControl(dataDir, "shutdown")
+	}
 
-	shutdown := runBackend(appDataDir, port, true, migratedLegacy)
+	mode := "browser"
+	if desktop {
+		mode = "desktop"
+	}
+	control := make(chan string, 8)
+	ownership, err := claimBackend(dataDir, mode, *devMode, port, control)
+	if err != nil || ownership == nil {
+		return err
+	}
+	defer ownership.Close()
 
-	// 主 goroutine 交给托盘：systray 在 init() 里 LockOSThread，
-	// 消息循环只能跑在启动它的那个 OS 线程上。
-	// tray.Run 阻塞至用户选择「退出程序」或收到系统信号。
-	tray.Run(tray.Config{
-		Tooltip: fmt.Sprintf("小播点歌工具 v%s — 右键菜单打开 / 退出", version.Version),
-		OnOpen: func() {
-			url := fmt.Sprintf("http://localhost:%d/", port)
-			if err := platform.OpenBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v", err)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
+	browserURL := fmt.Sprintf("http://localhost:%d/", port)
+	listener, listenErr := net.Listen("tcp4", address)
+	if listenErr != nil {
+		runningVersion := launcher.BackendVersion(port)
+		if runningVersion != "" && !desktop && !*devMode {
+			return platform.OpenBrowser(browserURL)
+		}
+		if runningVersion != "" && (*devMode || strings.HasPrefix(runningVersion, "5.")) {
+			if err := launcher.ShutdownBrowserBackend(port); err != nil {
+				return fmt.Errorf("无法关闭现有 BCTools 后端: %w", err)
 			}
-		},
-		OnExit: shutdown,
-	})
+			if !launcher.WaitForPortFree(port, 20*time.Second) {
+				return errors.New("等待现有 BCTools 后端退出超时")
+			}
+			listener, listenErr = net.Listen("tcp4", address)
+		}
+	}
+	if listenErr != nil && !desktop {
+		return fmt.Errorf("无法启动 BCTools HTTP 服务: %w", listenErr)
+	}
+	if listener != nil {
+		defer listener.Close()
+	}
 
-	shutdown()
-	log.Println("Server stopped")
+	legacy := !ephemeral && services.PrepareLegacyMigration(dataDir, log.Printf)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	requestStop := make(chan struct{})
+	var stopOnce sync.Once
+	stop := func() { stopOnce.Do(func() { close(requestStop) }) }
+	app, err := newBackend(ctx, dataDir, port, legacy, desktop, listenErr, stop)
+	if err != nil {
+		return err
+	}
+	defer app.close()
+	if listener != nil {
+		go func() {
+			if err := app.server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Printf("HTTP 服务停止: %v", err)
+				app.network.SetUnavailable(err)
+			}
+		}()
+	}
+	signals, stopSignals := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+	go func() {
+		<-signals.Done()
+		stop()
+	}()
+
+	if desktop {
+		return runDesktop(app.router, requestStop, control, dataDir)
+	}
+
+	openBrowser := func() {
+		if err := platform.OpenBrowser(browserURL); err != nil {
+			log.Printf("打开浏览器失败: %v", err)
+		}
+	}
+	updates.SignalReady(dataDir)
+	if !*devMode {
+		openBrowser()
+	}
+	go func() {
+		select {
+		case <-requestStop:
+		case <-control:
+		}
+		app.close()
+		tray.Stop()
+	}()
+	tray.Run(tray.Config{
+		Tooltip: fmt.Sprintf("小播点歌工具 v%s", version.Version),
+		OnOpen:  openBrowser,
+		OnExit:  app.close,
+	})
+	return nil
 }
 
-// runBackend 初始化并启动后端服务，返回一个幂等的关闭函数。
-// 它不再阻塞——主 goroutine 要留给托盘消息循环。
-func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLegacy bool) (shutdown func()) {
+func claimBackend(dataDir, mode string, replace bool, port int, control chan<- string) (io.Closer, error) {
+	deadline := time.Now().Add(25 * time.Second)
+	replacementRequested := false
+	for {
+		owner, err := launcher.Claim(dataDir, mode, control)
+		if err != nil || owner != nil {
+			return owner, err
+		}
+		if !replacementRequested {
+			switch {
+			case replace:
+				err = launcher.SendControl(dataDir, "shutdown")
+				replacementRequested = err == nil
+			case mode == "desktop":
+				err = launcher.SendControl(dataDir, "desktop")
+				switch {
+				case errors.Is(err, launcher.ErrSwitching):
+					replacementRequested = true
+				case err == nil:
+					return nil, nil
+				}
+			default:
+				if err = launcher.SendControl(dataDir, "status"); err == nil {
+					if !launcher.IsBackendRunning(port) {
+						return nil, errors.New("BCTools 正在运行，但局域网服务不可用")
+					}
+					return nil, platform.OpenBrowser(fmt.Sprintf("http://localhost:%d/", port))
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return nil, errors.New("等待 BCTools 启动或退出超时")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+type backend struct {
+	router  http.Handler
+	server  *http.Server
+	network *handlers.NetworkHandler
+	close   func()
+}
+
+func newBackend(ctx context.Context, appDataDir string, port int, migratedLegacy, desktop bool, listenErr error, requestStop func()) (*backend, error) {
 	// 1. Init app data directories
 	for _, dir := range []string{
 		appDataDir,
@@ -159,7 +254,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 		paths.GetBinDir(appDataDir),
 	} {
 		if err := paths.EnsureDir(dir); err != nil {
-			log.Fatalf("Cannot create dir %s: %v", dir, err)
+			return nil, fmt.Errorf("create %s: %w", dir, err)
 		}
 	}
 
@@ -185,17 +280,17 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 	logger := func(format string, args ...interface{}) {
 		log.Printf(format, args...)
 	}
-	repo, err := repo.New(appDataDir, logger)
+	repository, err := repo.New(appDataDir, logger)
 	if err != nil {
-		log.Fatalf("Failed to init repo: %v", err)
+		return nil, err
 	}
-	songStore := songstore.New(repo)
-	settingsStore := settingstore.New(repo)
-	snapshotStore := snapshotstore.New(repo, logger)
+	songStore := songstore.New(repository)
+	settingsStore := settingstore.New(repository)
+	snapshotStore := snapshotstore.New(repository, logger)
 	deletedLogStore := deletedlogstore.New(appDataDir)
 	updateLogService, err := services.NewUpdateLogService(appDataDir)
 	if err != nil {
-		log.Fatalf("Failed to init embedded update log: %v", err)
+		return nil, err
 	}
 
 	// 5. Init converter (ffmpeg/ffprobe)
@@ -227,11 +322,42 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 	conv := converter.New(ffmpegPath, ffprobePath)
 
 	// 6. MusicLibrary：周文件夹（MusicFiles\<YYYY年第N周>）布局引擎
-	library := services.NewMusicLibrary(appDataDir, repo, conv, logger)
+	library := services.NewMusicLibrary(appDataDir, repository, conv, logger)
 	if migratedLegacy {
 		// 阶段二：旧 uuid 歌曲文件倒进暂存区后按周重建布局
 		services.FinishLegacyMigration(appDataDir, library, logger)
 	}
+
+	pluginRegistry, err := plugins.New(filepath.Join(appDataDir, "plugins"), func() []byte {
+		var dorm, broadcast int
+		repository.Read(func(data *repo.Data) { dorm, broadcast = len(data.DormSongs), len(data.BroadcastSongs) })
+		result, _ := json.Marshal(map[string]int{"dorm": dorm, "broadcast": broadcast})
+		return result
+	}, func(err error) { log.Print(err) })
+	if err != nil {
+		return nil, err
+	}
+	updateManager, err := updates.New(appDataDir, version.Version, pluginRegistry)
+	if err != nil {
+		return nil, err
+	}
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			if err := library.CollectRetiredSongs(time.Now()); err != nil {
+				log.Printf("保留期清理: %v", err)
+			}
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 
 	// 7. Setup router with middleware
 	r := chi.NewRouter()
@@ -241,16 +367,16 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 
 	log.Println("SECURITY NOTICE: This release does not implement backend session authentication for sensitive endpoints. Any device that can reach this server port may call admin interfaces. Run only in trusted local networks.")
 
-	// 8. API routes
-	// lifecycle 需要引用下方才创建的 shutdown，先用间接层打破循环依赖。
-	var requestShutdown func()
-	lifecycle := handlers.NewLifecycleHandler(func() {
-		if requestShutdown != nil {
-			requestShutdown()
-		}
-	})
+	lifecycle := handlers.NewLifecycleHandler(requestStop)
+	networkInfo := handlers.NewNetworkHandler(port)
+	if listenErr != nil {
+		networkInfo.SetUnavailable(listenErr)
+	}
 
 	routes.RegisterRoutes(r, routes.HandlerSet{
+		Extensions: &handlers.ExtensionsHandler{
+			Repository: repository, Library: library, Plugins: pluginRegistry, Updates: updateManager, Stop: requestStop, Desktop: desktop,
+		},
 		Songs:     handlers.NewSongHandler(songStore, snapshotStore, library),
 		Files:     handlers.NewFileHandler(appDataDir, conv, library),
 		Auth:      handlers.NewAuthHandler(settingsStore),
@@ -258,7 +384,7 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 		Snapshot:  handlers.NewSnapshotHandler(snapshotStore),
 		Update:    handlers.NewUpdateHandler(settingsStore),
 		UpdateLog: handlers.NewUpdateLogHandler(updateLogService),
-		Network:   handlers.NewNetworkHandler(port),
+		Network:   networkInfo,
 		System:    handlers.NewSystemHandler(appDataDir, version.Version),
 		Decrypt:   handlers.NewDecryptHandler(appDataDir, conv),
 		Lifecycle: lifecycle,
@@ -269,101 +395,34 @@ func runBackend(appDataDir string, port int, shouldOpenBrowser bool, migratedLeg
 	server.RegisterUMReact(r, umReactFiles)
 	server.RegisterStatic(r, embeddedFiles)
 
-	// 11. Start server
-	addr := fmt.Sprintf("0.0.0.0:%d", port)
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           r,
+	router := server.WithUpdateAssets(r, updateManager)
+	httpServer := &http.Server{
+		Handler:           router,
 		ReadTimeout:       30 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
 		WriteTimeout:      120 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	launcher.SafeGo("server", func() {
-		log.Printf("小播点歌工具 v%s 已启动: http://localhost:%d", version.Version, port)
-		log.Printf("局域网访问: http://%s:%d", network.GetLocalIP(), port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
-		}
-	})
-
-	// 12. Auto-open browser
-	if shouldOpenBrowser {
-		launcher.SafeGo("browser", func() {
-			time.Sleep(500 * time.Millisecond)
-			url := fmt.Sprintf("http://localhost:%d/", port)
-			if err := platform.OpenBrowser(url); err != nil {
-				log.Printf("Failed to open browser: %v", err)
-			}
-		})
-	}
-
-	// 13. 关闭流程。用 sync.Once 保证幂等：托盘退出、Ctrl-C、前端请求
-	// 三条路径可能并发触发。
 	var once sync.Once
-	shutdown = func() {
-		once.Do(func() {
-			log.Println("Shutting down...")
-
-			// 先通知前端「要关了」，让已打开的页面自行 window.close()。
-			// 浏览器普遍拦截脚本关闭非脚本打开的标签页，因此这是 best-effort：
-			// 给一小段时间就继续退出，绝不因为关不掉页面而卡住。
-			lifecycle.NotifyClosing()
-			time.Sleep(300 * time.Millisecond)
-
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := server.Shutdown(ctx); err != nil {
-				log.Printf("HTTP shutdown error: %v", err)
-			}
-
-			// 一次性测试版：退出时清理临时数据目录，不留痕迹
-			if ephemeralMode {
-				log.SetOutput(os.Stderr) // 切离日志文件，避免占用导致删除失败
-				logFile.Close()
-				if rmErr := os.RemoveAll(appDataDir); rmErr != nil {
-					log.Printf("清理临时目录失败: %v", rmErr)
-				} else {
-					log.Printf("已清理临时数据目录: %s", appDataDir)
+	return &backend{
+		router:  router,
+		server:  httpServer,
+		network: networkInfo,
+		close: func() {
+			once.Do(func() {
+				lifecycle.NotifyClosing()
+				cancelWorker()
+				<-workerDone
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				if err := httpServer.Shutdown(ctx); err != nil {
+					log.Printf("HTTP shutdown: %v", err)
+					_ = httpServer.Close()
 				}
-			}
-		})
-	}
-	requestShutdown = func() {
-		shutdown()
-		// 前端请求关闭时，托盘消息循环还阻塞在主 goroutine 上，
-		// 需要显式收起托盘，否则进程不会退出。
-		tray.Stop()
-	}
-
-	// 信号退出走同一条关闭路径。
-	launcher.SafeGo("signal-watch", func() {
-		<-quit
-		log.Println("Received termination signal")
-		shutdown()
-		tray.Stop()
-	})
-
-	return shutdown
-}
-
-// cleanupStaleEphemeralDirs 清理 %TEMP% 下残留的旧 BCTools-test-* 目录
-// （应对上次测试版被强杀未能正常清理的情况）。
-func cleanupStaleEphemeralDirs() {
-	entries, err := os.ReadDir(os.TempDir())
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		if strings.HasPrefix(e.Name(), "BCTools-test-") {
-			os.RemoveAll(filepath.Join(os.TempDir(), e.Name()))
-		}
-	}
+				library.WaitForSync()
+				log.SetOutput(os.Stderr)
+				_ = logFile.Close()
+			})
+		},
+	}, nil
 }

@@ -8,23 +8,30 @@ SRC_DIR="$ROOT_DIR/src/ffmpeg"
 DIST_DIR="$ROOT_DIR/dist"
 
 FFMPEG_TAG="n7.0.2"
+FFMPEG_COMMIT="e3a61e91030696348b56361bdf80ea358aef4a19"
+FFMPEG_OFFICIAL="https://github.com/FFmpeg/FFmpeg.git"
 FFMPEG_MIRROR_GITEE="https://gitee.com/mirrors/ffmpeg.git"
 FFMPEG_MIRROR_PROXY="https://ghproxy.com/https://github.com/FFmpeg/FFmpeg.git"
 
 mkdir -p "$SRC_DIR" "$DIST_DIR"
 
 # --------------------------------------------------
-# 1. 拉取 ffmpeg 源码（优先国内镜像，失败自动换代理）
+# 1. 拉取固定提交（官方仓库不可用时切换镜像）
 # --------------------------------------------------
 if [ ! -d "$SRC_DIR/.git" ]; then
-    echo "[INFO] 正在克隆 ffmpeg 源码（优先 Gitee 镜像）..."
-    if ! git clone --depth 1 --branch "$FFMPEG_TAG" "$FFMPEG_MIRROR_GITEE" "$SRC_DIR"; then
-        echo "[WARN] Gitee 镜像失败，切换 GitHub 代理..."
-        git clone --depth 1 --branch "$FFMPEG_TAG" "$FFMPEG_MIRROR_PROXY" "$SRC_DIR"
+    if ! git clone --depth 1 --branch "$FFMPEG_TAG" "$FFMPEG_OFFICIAL" "$SRC_DIR"; then
+        echo "[WARN] GitHub 下载失败，切换镜像"
+        if ! git clone --depth 1 --branch "$FFMPEG_TAG" "$FFMPEG_MIRROR_GITEE" "$SRC_DIR"; then
+            git clone --depth 1 --branch "$FFMPEG_TAG" "$FFMPEG_MIRROR_PROXY" "$SRC_DIR"
+        fi
     fi
 fi
 
 cd "$SRC_DIR"
+if [ "$(git rev-parse HEAD)" != "$FFMPEG_COMMIT" ]; then
+    echo "[ERROR] FFmpeg 源码提交与锁定版本不匹配" >&2
+    exit 1
+fi
 
 # --------------------------------------------------
 # 2. configure：只保留 BroadcastTool 需要的音频能力
@@ -95,8 +102,21 @@ mv -v "$DIST_DIR/bin/ffmpeg.exe" "$DIST_DIR/ffmpeg.exe"
 mv -v "$DIST_DIR/bin/ffprobe.exe" "$DIST_DIR/ffprobe.exe"
 rm -rf "$DIST_DIR/bin" "$DIST_DIR/include" "$DIST_DIR/lib" "$DIST_DIR/share"
 
-# 复制许可证文件到 dist，方便分发
-cp -v "$SRC_DIR/COPYING"* "$DIST_DIR/" 2>/dev/null || true
+# 发布时把对应源码、构建脚本和许可证与二进制一起提供。
+if [ "${BCTOOLS_PACKAGE_FFMPEG_SOURCE:-}" = "1" ]; then
+    source_bundle="$(mktemp -d)"
+    trap 'rm -rf "$source_bundle"' EXIT
+    git archive --format=tar.gz --prefix="ffmpeg-$FFMPEG_TAG/" \
+        -o "$source_bundle/ffmpeg-$FFMPEG_TAG.tar.gz" "$FFMPEG_COMMIT"
+    lame_version="$(pacman -Q mingw-w64-ucrt-x86_64-lame | cut -d ' ' -f 2)"
+    lame_archive="mingw-w64-lame-$lame_version.src.tar.zst"
+    curl --fail --location --retry 3 --max-time 90 \
+        "https://repo.msys2.org/mingw/sources/$lame_archive" -o "$source_bundle/$lame_archive"
+    tar -tf "$source_bundle/$lame_archive" > /dev/null
+    cp "$SRC_DIR/COPYING"* "$ROOT_DIR/build.sh" "$ROOT_DIR/README.md" "$source_bundle/"
+    tar -czf "$DIST_DIR/FFmpeg-Sources.tar.gz" -C "$source_bundle" .
+fi
+cp -v "$SRC_DIR/COPYING"* "$DIST_DIR/"
 
 echo ""
 echo "[OK] 构建完成，产物位于: $DIST_DIR"

@@ -1,3 +1,5 @@
+//go:build windows
+
 // devlauncher 启动 bctools.exe 的 -dev 模式，用于开发测试。
 package main
 

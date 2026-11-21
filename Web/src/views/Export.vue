@@ -50,6 +50,7 @@
 </template>
 
 <script setup lang="ts">
+import { saveDownload } from "../utils/desktop"
 import { ref, watch, onMounted, computed, h, nextTick } from "vue"
 import { useI18n } from "../i18n"
 import { useSongsStore } from "../stores/songs"
@@ -179,11 +180,9 @@ async function exportPlaylist(type: SongType) {
   try {
     const dataUrl = await generateImage(dates, type)
     const week = getExportWeek(dates)
-    const a = document.createElement("a")
-    a.href = dataUrl
     const title = type === "dorm" ? t("export.dorm") : t("export.broadcast")
-    a.download = `第${week}周${title}.png`
-    a.click()
+    const blob = await (await fetch(dataUrl)).blob()
+    if (!(await saveDownload(blob, "第" + week + "周" + title + ".png"))) return
     message.success(t("export.success"))
   } catch (err) {
     const msg = err instanceof Error && err.message ? err.message : t("export.error")

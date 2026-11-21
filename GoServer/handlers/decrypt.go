@@ -52,10 +52,11 @@ type stageMetaResponse struct {
 // retrieve the file. A sidecar ".meta" file records the original filename.
 func (h *DecryptHandler) HandleStage(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 512<<20)
-	if err := r.ParseMultipartForm(512 << 20); err != nil {
+	if err := r.ParseMultipartForm(4 << 20); err != nil {
 		response.WriteValidationError(w, "文件过大")
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		response.WriteValidationError(w, "请上传文件")

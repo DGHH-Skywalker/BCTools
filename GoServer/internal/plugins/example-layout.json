@@ -1,0 +1,21 @@
+{
+  "id": "example-layout",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "name": "示例布局",
+  "permissions": ["ui.layout", "ui.contribute", "commands.run"],
+  "menu": [{"label": "插件示例", "path": "/plugins/example-layout/hello"}],
+  "pages": [{"id": "hello", "title": "插件示例", "text": "此页面由示例布局插件提供。"}],
+  "commands": [{"id": "ping", "label": "运行示例命令", "export": "run"}],
+  "layout": {
+    "title": "广播站首页",
+    "description": "由示例布局插件提供",
+    "action": {"label": "打开宿舍歌单", "path": "/dorm/manage"},
+    "navigation": [
+      {"label": "宿舍歌单", "path": "/dorm/manage"},
+      {"label": "播音歌单", "path": "/broadcast"},
+      {"label": "导出", "path": "/export"},
+      {"label": "手机点歌", "path": "/mobile"}
+    ]
+  }
+}

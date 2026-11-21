@@ -36,6 +36,7 @@
         </n-card>
       </n-grid-item>
     </n-grid>
+    <ExtensionsPanel />
   </PageContainer>
 </template>
 
@@ -46,6 +47,7 @@ import { useI18n } from "../i18n"
 import { useSettingsStore } from "../stores/settings"
 import { useTheme } from "../composables/useTheme"
 import { Help } from "@icon-park/vue-next"
+import ExtensionsPanel from "../components/settings/ExtensionsPanel.vue"
 import PageContainer from "../components/ui/PageContainer.vue"
 
 const { t } = useI18n()

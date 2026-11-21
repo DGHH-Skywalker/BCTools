@@ -1,6 +1,6 @@
 {
   "name": "bctools",
-  "version": "5.8.0.0",
+  "version": "6.0.0-beta1",
   "private": true,
   "description": "小播点歌工具 — Vue、um-react、Go 与 Inno Setup 的一体化构建入口。",
   "type": "module",
@@ -8,7 +8,7 @@
     "predev": "node scripts/ensure-root-deps.cjs",
     "dev": "concurrently -n web,api -c blue,green --kill-others-on-fail \"npm:dev:web\" \"npm:dev:server\"",
     "dev:web": "npm --prefix Web run dev",
-    "dev:server": "go -C GoServer run . -- --dev",
+    "dev:server": "go -C GoServer run . --dev",
     "prebuild": "node scripts/ensure-root-deps.cjs",
     "build": "npm run build:prepare && npm run build:server && npm run build:installer",
     "build:prepare": "concurrently --kill-others-on-fail -n vue,um-react,ffmpeg -c blue,magenta,green \"npm:build:web-and-copy\" \"npm:build:um-react\" \"npm:build:inject-ffmpeg\"",
@@ -17,8 +17,8 @@
     "build:um-react": "node scripts/build-um-react.cjs",
     "build:copy": "node scripts/copy-embed.cjs",
     "build:inject-ffmpeg": "node scripts/inject-ffmpeg.cjs",
-    "build:server": "npm run build:versioninfo && go -C GoServer build -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
-    "build:versioninfo": "go -C GoServer run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.7.0 -o resource.syso versioninfo.json",
+    "build:server": "npm run build:versioninfo && go -C GoServer build -tags production -ldflags=\"-s -w -H windowsgui\" -o ../dist/bctools.exe .",
+    "build:versioninfo": "go -C GoServer run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.7.0 -64 -o resource_windows_amd64.syso versioninfo.json",
     "build:installer": "node scripts/build-installer.cjs",
     "build:server-only": "npm run build:server",
     "build:clean": "node scripts/clean-all.cjs",
@@ -27,7 +27,8 @@
     "pretype-check": "node scripts/prepare-go-embed-stubs.cjs",
     "type-check": "npm --prefix Web run type-check && go -C GoServer vet ./...",
     "lint": "npm --prefix Web run lint",
-    "prune:i18n": "node scripts/prune-i18n.cjs"
+    "prune:i18n": "node scripts/prune-i18n.cjs",
+    "generate:api": "node scripts/generate-api.cjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

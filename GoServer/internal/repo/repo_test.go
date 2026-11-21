@@ -140,13 +140,19 @@ func TestAtomicWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read data.json: %v", err)
 	}
-	var payload Data
-	if err := json.Unmarshal(data, &payload); err != nil {
-		t.Fatalf("data.json invalid: %v", err)
+	var header storageHeader
+	if err := json.Unmarshal(data, &header); err != nil || header.SchemaVersion != storageSchema {
+		t.Fatalf("invalid storage header: %s (%v)", data, err)
 	}
-	if len(payload.DormSongs) != 2 {
-		t.Fatalf("expected 2 songs, got %d", len(payload.DormSongs))
+	reopened, err := New(dir, t.Logf)
+	if err != nil {
+		t.Fatal(err)
 	}
+	reopened.Read(func(d *Data) {
+		if len(d.DormSongs) != 2 {
+			t.Fatalf("expected 2 songs, got %d", len(d.DormSongs))
+		}
+	})
 }
 
 func TestDataCorruptionRecovery(t *testing.T) {

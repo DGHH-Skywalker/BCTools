@@ -20,15 +20,13 @@ package tray
 import (
 	"log"
 	"syscall"
-	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 const (
 	// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 —— Win10 1703+。
-	// 用 HANDLE（指针）形态传入：SetProcessDpiAwarenessContext 要的是 DPI_AWARENESS_CONTEXT
-	// (void*)，传负数常量得先存到变量再取地址。
+	// DPI_AWARENESS_CONTEXT uses a negative pseudo-handle value.
 	dpiAwarenessContextPerMonitorAwareV2 = -4
 
 	// PROCESS_PER_MONITOR_DPI_AWARE —— Win8.1 fallback
@@ -52,7 +50,7 @@ func init() {
 	if procSetProcessDpiAwarenessContext.Find() == nil {
 		r1, _, _ := syscall.SyscallN(
 			procSetProcessDpiAwarenessContext.Addr(),
-			uintptr(unsafe.Pointer(&perMonitorV2)),
+			uintptr(perMonitorV2),
 		)
 		if r1 != 0 {
 			return

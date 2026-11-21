@@ -9,9 +9,10 @@
         :img-props="{ draggable: false }"
         @contextmenu.prevent
       />
-      <n-h1 class="home-title" @contextmenu.prevent>{{ t("home.title") }}</n-h1>
+      <n-h1 class="home-title" @contextmenu.prevent>{{ activePlugins.layout?.title || t("home.title") }}</n-h1>
+      <n-text v-if="activePlugins.layout?.description">{{ activePlugins.layout.description }}</n-text>
       <n-space>
-        <n-button type="primary" size="large" @click="$router.push('/dorm/manage')">{{ t("home.startButton") }}</n-button>
+        <n-button type="primary" size="large" @click="$router.push(activePlugins.layout?.action.path || '/dorm/manage')">{{ activePlugins.layout?.action.label || t("home.startButton") }}</n-button>
         <n-button size="large" @click="mode = 'feasibility'">{{ t("home.feasibilityCheckButton") }}</n-button>
       </n-space>
     </div>
@@ -21,6 +22,7 @@
 </template>
 
 <script setup lang="ts">
+import { activePlugins } from "../api/extensions"
 import { ref, computed } from "vue"
 import { useI18n } from "../i18n"
 import { useTheme } from "../composables/useTheme"

@@ -34,6 +34,11 @@ const versionSource = fs.readFileSync(VERSION_FILE, "utf8")
 const version = versionSource.match(/const\s+Version\s*=\s*"([^"]+)"/)?.[1]
 if (!version) fail("无法从 GoServer/internal/version/version.go 读取版本号")
 
+const { FileVersion: fixedVersion } = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "GoServer", "versioninfo.json"), "utf8"),
+).FixedFileInfo
+const numericVersion = [fixedVersion.Major, fixedVersion.Minor, fixedVersion.Patch, fixedVersion.Build].join(".")
+
 const iscc = findISCC()
 if (!iscc) {
   fail("未找到 Inno Setup 6 编译器 ISCC.exe。请安装 Inno Setup 6，或设置 ISCC_PATH。")
@@ -42,7 +47,7 @@ if (!iscc) {
 fs.mkdirSync(DIST, { recursive: true })
 process.stdout.write(`[installer] 使用 ${iscc}\n`)
 process.stdout.write(`[installer] 构建 BCTools ${version}\n`)
-const result = spawnSync(iscc, [`/DMyAppVersion=${version}`, SCRIPT], {
+const result = spawnSync(iscc, [`/DMyAppVersion=${version}`, `/DMyAppNumericVersion=${numericVersion}`, SCRIPT], {
   cwd: ROOT,
   stdio: "inherit",
   windowsHide: true,

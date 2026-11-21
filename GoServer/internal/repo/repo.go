@@ -24,6 +24,9 @@ type Repository struct {
 
 // New creates a new repository, loading existing data or initializing defaults.
 func New(appDataDir string, logger func(format string, args ...interface{})) (*Repository, error) {
+	if logger == nil {
+		logger = func(string, ...interface{}) {}
+	}
 	r := &Repository{
 		appDataDir: appDataDir,
 		dataPath:   paths.GetDataFilePath(appDataDir),
@@ -52,10 +55,37 @@ func (r *Repository) Read(fn func(*Data)) {
 func (r *Repository) Write(fn func(*Data) error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if err := fn(&r.data); err != nil {
+	return r.writeLocked(fn, nil, nil)
+}
+
+func (r *Repository) WriteWithMoves(fn func(*Data) error, moves []FileMove) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.writeLocked(fn, moves, nil)
+}
+
+func (r *Repository) writeLocked(fn func(*Data) error, moves []FileMove, extra map[string]json.RawMessage) error {
+	data, err := json.Marshal(r.data)
+	if err != nil {
 		return err
 	}
-	return r.atomicWrite()
+	var next Data
+	if err := json.Unmarshal(data, &next); err != nil {
+		return err
+	}
+	if err := fn(&next); err != nil {
+		return err
+	}
+	if next.NextSongID < r.data.NextSongID {
+		next.NextSongID = r.data.NextSongID
+	}
+	includeSongID(&next, next.DormSongs)
+	includeSongID(&next, next.BroadcastSongs)
+	if err := r.persist(next, moves, extra); err != nil {
+		return err
+	}
+	r.data = next
+	return nil
 }
 
 // SnapshotData returns the current data encoded as indented JSON.
@@ -68,6 +98,23 @@ func (r *Repository) SnapshotData() ([]byte, error) {
 func (r *Repository) loadOrInit() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	if err := os.MkdirAll(r.appDataDir, 0700); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(r.appDataDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	var pending fileTransaction
+	if err := readJSON(root, journalName, &pending); err == nil {
+		if err := replay(root, pending); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 
 	data, err := os.ReadFile(r.dataPath)
 	if err != nil {
@@ -83,7 +130,17 @@ func (r *Repository) loadOrInit() error {
 		return fmt.Errorf("read data.json: %w", err)
 	}
 
-	if err := json.Unmarshal(data, &r.data); err != nil {
+	var header storageHeader
+	headerErr := json.Unmarshal(data, &header)
+	if headerErr == nil && header.SchemaVersion != 0 {
+		r.data, err = loadStorage(root, header)
+		if err != nil {
+			return err
+		}
+	} else if err := json.Unmarshal(data, &r.data); err != nil {
+		if _, archiveErr := root.Lstat(archiveName); archiveErr == nil {
+			return fmt.Errorf("corrupt storage header: %w", err)
+		}
 		backupName := fmt.Sprintf("data.json.bak.%d", time.Now().Unix())
 		backupPath := filepath.Join(r.appDataDir, backupName)
 		if backupErr := os.WriteFile(backupPath, data, 0644); backupErr != nil {
@@ -119,9 +176,6 @@ func (r *Repository) loadOrInit() error {
 	needSeedTimeSlots := r.data.Settings.TimeSlots == nil
 	r.data.Settings.TimeSlots = EnsureDefaultTimeSlots(r.data.Settings.TimeSlots)
 	if needSeedTimeSlots {
-		if err := r.atomicWrite(); err != nil {
-			return fmt.Errorf("migrate default time slots: %w", err)
-		}
 		r.logger("seeded %d default time slots for legacy data file", len(r.data.Settings.TimeSlots))
 	}
 
@@ -138,28 +192,24 @@ func (r *Repository) loadOrInit() error {
 		}
 	}
 	if migrated {
-		if err := r.atomicWrite(); err != nil {
-			return fmt.Errorf("migrate broadcast periods: %w", err)
-		}
 		r.logger("migrated broadcast song periods")
 	}
 
 	r.logger("data.json loaded: %d dorm, %d broadcast songs",
 		len(r.data.DormSongs), len(r.data.BroadcastSongs))
+	if header.SchemaVersion == 0 {
+		if err := atomicFile(root, "data.v1-backup.json", data); err != nil {
+			return err
+		}
+	}
+	includeSongID(&r.data, r.data.DormSongs)
+	includeSongID(&r.data, r.data.BroadcastSongs)
+	if header.SchemaVersion == 0 || needSeedTimeSlots || migrated {
+		return r.atomicWrite()
+	}
 	return nil
 }
 
 func (r *Repository) atomicWrite() error {
-	tmpPath := r.dataPath + ".tmp"
-	data, err := json.MarshalIndent(r.data, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal data: %w", err)
-	}
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return fmt.Errorf("write tmp file: %w", err)
-	}
-	if err := os.Rename(tmpPath, r.dataPath); err != nil {
-		return fmt.Errorf("rename tmp->data.json: %w", err)
-	}
-	return nil
+	return r.persist(r.data, nil, nil)
 }

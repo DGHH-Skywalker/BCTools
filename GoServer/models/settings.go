@@ -14,6 +14,7 @@ type TimeSlot struct {
 // 不再作为设置项暴露——见 converter/silent.go。旧数据文件里的
 // silentPlaceholderDuration 字段会被忽略。
 type Settings struct {
+	Retention          RetentionSettings `json:"retention"`
 	TimeSlots          []TimeSlot        `json:"timeSlots"`
 	AllowTemplateJS    bool              `json:"allowTemplateJS"`
 	AdminPasswordHash  string            `json:"adminPasswordHash,omitempty"`
@@ -47,4 +48,19 @@ type UpdateSettingsRequest struct {
 	Confirmed          bool               `json:"confirmed,omitempty"`
 	BroadcastColumnMap *map[string]string `json:"broadcastColumnMap,omitempty"`
 	DuplicateCheckDays *int               `json:"duplicateCheckDays,omitempty"`
+}
+
+type RetentionSettings struct {
+	AudioWeeks    int `json:"audioWeeks"`
+	MetadataYears int `json:"metadataYears"`
+}
+
+func (s RetentionSettings) Effective() RetentionSettings {
+	if s.AudioWeeks < 1 || s.AudioWeeks > 520 {
+		s.AudioWeeks = 4
+	}
+	if s.MetadataYears < 1 || s.MetadataYears > 50 {
+		s.MetadataYears = 2
+	}
+	return s
 }

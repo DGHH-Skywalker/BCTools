@@ -1,14 +1,54 @@
 package launcher
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 )
+
+var loopbackClient = &http.Client{
+	Timeout:       2 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
+
+// BackendVersion identifies BCTools on the port, including releases that
+// predate the shared data-directory control channel.
+func BackendVersion(port int) string {
+	res, err := loopbackClient.Get(fmt.Sprintf("http://127.0.0.1:%d/api/system/status", port))
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	var status struct {
+		Version          string `json:"version"`
+		FFmpegAvailable  *bool  `json:"ffmpegAvailable"`
+		FFprobeAvailable *bool  `json:"ffprobeAvailable"`
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 4096)).Decode(&status) != nil ||
+		status.FFmpegAvailable == nil || status.FFprobeAvailable == nil {
+		return ""
+	}
+	return status.Version
+}
+
+func ShutdownBrowserBackend(port int) error {
+	res, err := loopbackClient.Post(fmt.Sprintf("http://127.0.0.1:%d/api/shutdown", port), "application/json", nil)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("BCTools shutdown returned HTTP %d", res.StatusCode)
+	}
+	return nil
+}
 
 // IsBackendRunning checks whether something is listening on the given localhost port.
 func IsBackendRunning(port int) bool {

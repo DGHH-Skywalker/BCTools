@@ -1,5 +1,9 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "5.8.0.0"
+  #define MyAppVersion "6.0.0-beta1"
+#endif
+
+#ifndef MyAppNumericVersion
+  #define MyAppNumericVersion "5.10.0.1"
 #endif
 
 #define MyAppName "小播点歌工具"
@@ -14,8 +18,10 @@ AppId={{A845EA30-1D47-48D8-A9B1-62C6A4A56CD3}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-VersionInfoVersion={#MyAppVersion}
-VersionInfoProductVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppNumericVersion}
+VersionInfoTextVersion={#MyAppNumericVersion}
+VersionInfoProductVersion={#MyAppNumericVersion}
+VersionInfoProductTextVersion={#MyAppVersion}
 DefaultDirName={code:GetDefaultInstallDir}
 DefaultGroupName=BCTools
 UsePreviousAppDir=yes
@@ -126,7 +132,18 @@ var
   ResultCode: Integer;
   Attempt: Integer;
 begin
-  // BCTools exposes a supported local shutdown endpoint. Ask it to stop first,
+  if FileExists(ExpandConstant('{app}\{#MyAppExeName}')) then
+  begin
+    Exec(ExpandConstant('{app}\{#MyAppExeName}'), '--shutdown',
+      ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    for Attempt := 1 to 80 do
+    begin
+      if not IsBCToolsRunning then Exit;
+      if ResultCode <> 0 then Break;
+      Sleep(250);
+    end;
+  end;
+  // The HTTP endpoint supports older installed versions.
   // then wait before allowing Inno Setup to replace any application file.
   Exec('powershell.exe',
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { Invoke-RestMethod -Uri ''http://127.0.0.1:1743/api/shutdown'' -Method Post -TimeoutSec 3 | Out-Null } catch {}"',

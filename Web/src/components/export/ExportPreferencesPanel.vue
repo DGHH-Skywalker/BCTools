@@ -31,6 +31,11 @@
         </n-space>
 
         <template v-if="!exportStore.simpleMode">
+          <n-space v-if="Object.keys(resourceTemplates).length" align="center">
+            <n-text strong>海报文案模板</n-text>
+            <n-select v-model:value="templateName" :options="templateOptions" placeholder="选择模板" style="width: 180px" />
+            <n-button :disabled="!templateName" @click="applyTemplate">应用到两类歌单</n-button>
+          </n-space>
           <n-space vertical class="drawer-section">
             <n-text strong>{{ t("export.vacationBadge") }}</n-text>
             <n-radio-group v-model:value="exportStore.vacationBadge" vertical>
@@ -84,7 +89,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref } from "vue"
+import { resourceTemplates } from "../../api/extensions"
 import { useI18n } from "../../i18n"
 import { useExportStore } from "../../stores/export"
 import { useAppConfig } from "../../composables/useAppConfig"
@@ -98,6 +104,16 @@ const exportStore = useExportStore()
 const { config } = useAppConfig()
 const message = useMessage()
 const themeColor = computed(() => config.value.themeColor)
+
+const templateName = ref<string | null>(null)
+const templateOptions = computed(() => Object.keys(resourceTemplates.value).map(label => ({ label, value: label })))
+function applyTemplate() {
+  const template = templateName.value && resourceTemplates.value[templateName.value]
+  if (template) {
+    exportStore.posterQuoteDorm = template
+    exportStore.posterQuoteBroadcast = template
+  }
+}
 
 function blurLabel(type: SongType) {
   const blur = type === "dorm" ? exportStore.posterBlurDorm : exportStore.posterBlurBroadcast

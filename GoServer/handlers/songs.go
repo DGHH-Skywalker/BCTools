@@ -58,7 +58,9 @@ func (h *SongHandler) syncAfterChange(songs ...models.Song) {
 // scheduleSyncAfterChange keeps editing responsive. The playlist is already
 // committed; a later export also performs a full synchronization.
 func (h *SongHandler) scheduleSyncAfterChange(songs ...models.Song) {
-	go h.syncAfterChange(songs...)
+	if h.Library != nil {
+		h.Library.ScheduleSync(func() { h.syncAfterChange(songs...) })
+	}
 }
 
 func (h *SongHandler) HandleSort(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +276,7 @@ func (h *SongHandler) HandleImport(w http.ResponseWriter, r *http.Request) {
 		response.WriteValidationError(w, "文件过大或格式错误")
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		response.WriteValidationError(w, "请上传文件")

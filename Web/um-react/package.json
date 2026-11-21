@@ -96,7 +96,8 @@
     },
     "overrides": {
       "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@1.4.15",
-      "@swc/core": "1.10.7"
+      "@swc/core": "1.10.7",
+      "prismjs": "1.30.0"
     },
     "onlyBuiltDependencies": [
       "@swc/core",

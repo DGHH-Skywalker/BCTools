@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"embed"
 	"io/fs"
 	"net/http"
@@ -27,6 +28,12 @@ func RegisterUMReact(r chi.Router, files embed.FS) {
 	r.Get("/um-react", func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, "/um-react/", http.StatusFound)
 	})
+	r.Get("/um-react/sw.js", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		setUMReactContentType(w, ".js")
+		_, _ = w.Write([]byte(`self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(self.registration.unregister()));`))
+	})
 	r.HandleFunc("/um-react/*", serveUMReact(staticFS))
 }
 
@@ -50,18 +57,23 @@ func serveUMReact(staticFS fs.FS) http.HandlerFunc {
 			}
 			w.Header().Set("Cache-Control", "no-cache")
 			setUMReactContentType(w, ".html")
-			w.Write(data)
+			w.Write(umReactDocumentBase(data, "/um-react/"))
 			return
 		}
 
 		if p == "index.html" {
 			w.Header().Set("Cache-Control", "no-cache")
+			data = umReactDocumentBase(data, "/um-react/")
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
 		setUMReactContentType(w, path.Ext(p))
 		w.Write(data)
 	}
+}
+
+func umReactDocumentBase(data []byte, base string) []byte {
+	return bytes.Replace(data, []byte("<head>"), []byte(`<head><base href="`+base+`">`), 1)
 }
 
 // setUMReactContentType sets the Content-Type for um-react assets. The .wasm

@@ -72,8 +72,23 @@ func (s *SnapshotStore) CreatePreImportSnapshot() (string, error) {
 
 // RestoreFromSnapshot restores data from a snapshot file.
 func (s *SnapshotStore) RestoreFromSnapshot(filename string) error {
-	snapshotPath := filepath.Join(paths.GetSnapshotsDir(s.repo.AppDataDir()), filename)
-	snapshotData, err := os.ReadFile(snapshotPath)
+	if filename != filepath.Base(filename) || !filepath.IsLocal(filename) || strings.ContainsAny(filename, `/\`) ||
+		!strings.HasPrefix(filename, "snapshot-") || filepath.Ext(filename) != ".json" {
+		return fmt.Errorf("invalid snapshot filename")
+	}
+	root, err := os.OpenRoot(paths.GetSnapshotsDir(s.repo.AppDataDir()))
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	entry, err := root.Lstat(filename)
+	if err != nil {
+		return err
+	}
+	if !entry.Mode().IsRegular() {
+		return fmt.Errorf("invalid snapshot file")
+	}
+	snapshotData, err := root.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("read snapshot: %w", err)
 	}
@@ -84,8 +99,13 @@ func (s *SnapshotStore) RestoreFromSnapshot(filename string) error {
 	return s.repo.Write(func(data *repo.Data) error {
 		backupPath := filepath.Join(s.repo.AppDataDir(),
 			fmt.Sprintf("data.json.bak.%d", time.Now().Unix()))
-		currentData, _ := json.MarshalIndent(*data, "", "  ")
-		os.WriteFile(backupPath, currentData, 0644)
+		currentData, err := json.MarshalIndent(*data, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(backupPath, currentData, 0600); err != nil {
+			return err
+		}
 		*data = restored
 		return nil
 	})

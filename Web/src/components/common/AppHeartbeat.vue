@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue"
+import { runsInDesktop } from "../../utils/desktop"
 import { useNotification } from "naive-ui"
 
 const notification = useNotification()
@@ -63,6 +64,7 @@ async function watchShutdown() {
 }
 
 onMounted(() => {
+  if (runsInDesktop()) return
   ping()
   intervalId = window.setInterval(ping, 30000)
   watchShutdown()

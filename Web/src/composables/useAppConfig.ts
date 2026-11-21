@@ -15,6 +15,7 @@ const config = ref<AppConfig>({
 })
 
 let loaded = false
+let baseConfig = { ...config.value }
 
 function parseIni(text: string): Record<string, string> {
   const result: Record<string, string> = {}
@@ -51,10 +52,21 @@ export async function loadAppConfig(): Promise<AppConfig> {
   } catch (err) {
     console.warn("Failed to load config.ini:", err)
   }
+  baseConfig = { ...config.value }
   loaded = true
   return config.value
 }
 
+function applyResourceConfig(overrides: Record<string, string>) {
+  config.value = { ...baseConfig }
+  const theme = overrides.themeColor
+  if (theme && isHexColor(theme)) config.value.themeColor = theme
+  for (const key of ["importXlsxEnabled", "exportXlsxEnabled"] as const) {
+    if (overrides[key] === "true" || overrides[key] === "false") config.value[key] = overrides[key] === "true"
+  }
+  return config.value
+}
+
 export function useAppConfig() {
-  return { config: readonly(config), loadAppConfig }
+  return { config: readonly(config), loadAppConfig, applyResourceConfig }
 }

@@ -11,13 +11,13 @@
 |------|------|------|
 | `Web/` | Vue 3 + Vite + TypeScript + Naive UI | 主前端：歌单 / 点歌 / 导出 / 设置 / 数据迁移 |
 | `Web/um-react/` | React + Vite（[Unlock Music](https://git.um-react.app/um/um-react) 源码直接放进仓库） | ncm / qmc / kgm 浏览器端解密器，嵌进主程序 |
-| `GoServer/` | Go 1.22+（chi router、fyne systray、go:embed） | 单文件 exe：HTTP API + 文件转码 + 系统托盘 |
-| `installer/` | C++ Win32 / GDI+（MinGW-w64 编译） | 安装 / 卸载程序，可选 |
+| `GoServer/` | Go 1.26.11、chi、Wails v3、fyne systray | 单文件 exe 提供 HTTP API、文件转码、桌面窗口和托盘 |
+| `installer/` | Inno Setup 6 | Windows 安装和卸载程序 |
 | `scripts/` | Node（.cjs） | 构建辅助：um-react、注入 ffmpeg、清理等 |
 
 构建产物：
 - `dist/bctools.exe` — 单文件主程序（含 Vue 前端、um-react、ffmpeg/ffprobe）
-- `dist/BCTools-Setup.exe` — Windows 安装包（可选，要 MinGW）
+- `dist/BCTools-Setup.exe` — Windows 安装包
 
 ---
 
@@ -27,9 +27,10 @@
 |------|--------|------|------|
 | Git | 2.30+ | `git --version` | clone 用 |
 | Node.js | 24+ | `node --version` | 前端 / 构建脚本 |
-| Go | 1.22+ | `go version` | 后端（推荐 1.24+） |
-| pnpm | 9+ | `pnpm --version` 或 `corepack pnpm --version` | um-react 依赖（**用 corepack 调即可，无需全局装**） |
-| MinGW-w64 | 8+ | `g++ --version` | **可选**：仅在跑 `npm run build:installer` 时需要 |
+| Go | 1.26.11 | `go version` | Windows 后端与版本资源 |
+| pnpm | 10.15.1 | `corepack pnpm@10.15.1 --version` | um-react 依赖 |
+| Inno Setup | 6 | `ISCC.exe` | Windows 安装包 |
+| MSYS2 UCRT64 | 当前版本 | 见 FFmpeg 构建指南 | 编译精简 FFmpeg/ffprobe |
 
 无管理员权限也能跑：用 `corepack pnpm` 代替全局 pnpm；Go 装到用户目录也行。
 
@@ -43,14 +44,13 @@ cd bctools
 
 # 根目录 devDependencies（concurrently 等）— npm run dev / build 入口会自动跑，
 # 也可以手动先装：
-npm install
+npm ci
 
 # 前端依赖
-npm --prefix Web install --legacy-peer-deps
+npm --prefix Web ci --legacy-peer-deps
 
 # um-react 依赖（用 corepack pnpm，无管理员权限也行）
-corepack pnpm --version                    # 先确认 corepack 调得到
-corepack pnpm --dir Web/um-react install --no-frozen-lockfile
+corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
 ```
 
 > `npm run dev` / `npm run build` 都会在执行前自动检查根 `node_modules`；
@@ -96,28 +96,25 @@ npm run build
 | 并行 2 | `build:um-react` | 构建、注入桥接脚本并复制到 `GoServer/embed/um-react/` |
 | 并行 3 | `build:inject-ffmpeg` | 将精简版 ffmpeg/ffprobe 放入 Go 的嵌入目录 |
 | 收敛 1 | `build:server` | 编译 `dist/bctools.exe`（GUI 应用，启动不闪黑框） |
-| 收敛 2 | `build:installer` | 编译 `dist/BCTools-Setup.exe`；缺少 MinGW 时会跳过并提示 |
+| 收敛 2 | `build:installer` | 使用 Inno Setup 编译 `dist/BCTools-Setup.exe` |
 
 产物：
-- `dist/bctools.exe` ~45 MB（自带前端 + um-react + ffmpeg/ffprobe，GUI 应用）
-- `dist/BCTools-Setup.exe` ~57 MB（仅在装了 MinGW 时生成）
+- `dist/bctools.exe` 内置前端、um-react 和精简 FFmpeg/ffprobe
+- `dist/BCTools-Setup.exe` 安装包
 
 > 5.6.0 起**不再生成 `bctool_dev.exe`**——所有 dev 模式都走 `npm run dev`（go run）。Release 包只需要主 exe 和 setup。
 
 ### 4.2 启动不闪黑框
-所有产物都用 `-H windowsgui`（Go）+ `-mwindows`（g++）编译：直接双击 `dist/bctools.exe` 不会出现控制台窗口。**别**用 `go run` 启动生产 exe——dev 模式本来就要看日志。
+主程序用 Go 的 `-H windowsgui` 编译。双击启动系统浏览器，`dist\bctools.exe desktop` 使用桌面窗口。桌面模式依赖 Microsoft Edge WebView2 Runtime。
 
-### 4.3 安装程序（必选，5.6.0 起）
+### 4.3 安装程序
 
 ```bash
-# 5.6.0 起 npm run build 默认就会跑安装程序构建；
-# 没装 MinGW-w64 也会跳过并打 warning，不影响 bctools.exe 主产物。
 npm run build               # 已经包含 build:installer
-npm run build:installer     # 想单独跑也行
+npm run build:installer     # 主程序已经生成时单独构建安装包
 ```
 
-需要 MinGW-w64 提供 `g++` 和 `make`（Windows 上常用 `mingw32-make`）。
-脚本会自动从常见路径找 MinGW，没装就跳过。
+脚本从常见路径查找 `ISCC.exe`。自定义安装路径可通过 `ISCC_PATH` 指定。
 
 ### 4.4 单独跑某一步
 
@@ -251,7 +248,7 @@ A：`go run` 接收参数用 `--` 分隔。Windows Git Bash + npm 链里这层�
 当前默认 `--dev` 是通过的；遇到再排查。
 
 **Q：精简版 ffmpeg 在哪？**
-A：`GoServer/ffmpeg_bctools_mini/`，由单独的 `build.sh` 生成。仓库里只放编译好的 `dist/ffmpeg.exe` / `ffprobe.exe`。本仓库不维护精简版 ffmpeg 的源码（那是另一个项目）。缺失时 `npm run build` 会在 `build:inject-ffmpeg` 阶段中止，避免运行时回退到系统完整版。
+A：在 MSYS2 UCRT64 中运行 `GoServer/ffmpeg_bctools_mini/build.sh`，产物位于该目录的 `dist/`。GitHub Actions 会编译并缓存。缺少产物时完整构建会在嵌入步骤报告错误。
 
 **Q：构建时 Go 报 `undefined: services`？**
 A：检查 `GoServer/main.go` 顶部 imports 是否含 `broadcast-tool/services`。5.6.0 后已加。
@@ -263,26 +260,6 @@ A：单测里 `<router-link>` 没有显式 path 时会触发该警告。已在 `
 
 ## 9. 发版流程
 
-```bash
-# 1. 改版本号（仅一处即可，Go ldflags 会覆盖）
-#    GoServer/internal/version/version.go
-#    Web/package.json
-#    package.json
+应用显示版本在 `package.json`、`Web/package.json`、相应锁文件和 `GoServer/internal/version/version.go` 同步。Windows 数字文件版本和显示产品版本分别来自 `GoServer/versioninfo.json`。安装包构建读取这两组值。
 
-# 2. 构建
-npm run build
-# 可选：npm run build:installer（需要 MinGW）
-
-# 3. 产物
-ls dist/
-#   bctools.exe            单文件主程序
-#   bctool_dev.exe         开发模式启动器
-#   BCTools-Setup.exe      安装包（如有）
-
-# 4. 打 tag + 推 GitHub
-git tag v5.6.0.0
-git push origin v5.6.0.0
-# 在 GitHub Releases 里把 dist/ 下的 exe 作为 release assets 上传
-```
-
-精简版 ffmpeg 缺失时 `npm run build` 会显式报错中止——这是故意的：避免运行时悄悄回退到系统完整版 ffmpeg（可能引入不必要的编解码器体积 / 协议支持差异）。
+`Build` 工作流在 `main` 提交和 PR 上执行检查并生成 Windows 构建产物，也支持手动运行。推送匹配应用版本的标签后，`Release` 工作流复用构建并发布 EXE、安装包、更新目标包和 SHA-256 校验清单。`v6.0.0-beta1` 为预发行版。更新目标包的签名和更新仓库配置见 [签名更新](docs/SIGNED_UPDATES.md)。

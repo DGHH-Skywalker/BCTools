@@ -12,6 +12,7 @@ import (
 
 // Data represents the full data file structure.
 type Data struct {
+	NextSongID     int64           `json:"nextSongId,omitempty"`
 	DormSongs      []models.Song   `json:"dormSongs"`
 	BroadcastSongs []models.Song   `json:"broadcastSongs"`
 	Settings       models.Settings `json:"settings"`

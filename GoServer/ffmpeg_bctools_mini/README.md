@@ -62,3 +62,4 @@ dist/
 - 本仓库中的构建脚本、文档采用 MIT 许可证（见 `LICENSE`）。
 - 编译后的 `ffmpeg.exe` / `ffprobe.exe` 二进制遵循 ffmpeg 原许可证。由于启用了 `libmp3lame` 并打开了 `--enable-gpl --enable-version3`，生成物为 **GPLv3**。
 - 分发时请务必附带 `dist/COPYING*` 许可证文件。
+- GitHub Actions 设置 `BCTOOLS_PACKAGE_FFMPEG_SOURCE=1`，生成随 Release 分发的 `FFmpeg-Sources.tar.gz`，其中包含固定提交的 FFmpeg 源码、对应 LAME 源码包、构建脚本及许可证。

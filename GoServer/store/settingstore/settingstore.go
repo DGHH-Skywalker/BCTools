@@ -4,6 +4,8 @@ import (
 	"broadcast-tool/internal/repo"
 	"broadcast-tool/internal/version"
 	"broadcast-tool/models"
+	"maps"
+	"slices"
 )
 
 // SettingsStore handles application settings.
@@ -18,8 +20,9 @@ func New(repo *repo.Repository) *SettingsStore {
 
 func ensureBroadcastColumnMap(m map[string]string) map[string]string {
 	defaults := map[string]string{"1": "新闻", "2": "文学", "3": "音乐", "4": "电影", "5": "新闻", "6": "文学", "7": "音乐"}
+	m = maps.Clone(m)
 	if m == nil {
-		m = map[string]string{}
+		m = make(map[string]string)
 	}
 	for k, v := range defaults {
 		if _, ok := m[k]; !ok {
@@ -34,7 +37,7 @@ func (s *SettingsStore) GetSettings() models.PublicSettings {
 	var public models.PublicSettings
 	s.repo.Read(func(data *repo.Data) {
 		public = models.PublicSettings{
-			TimeSlots:          data.Settings.TimeSlots,
+			TimeSlots:          slices.Clone(data.Settings.TimeSlots),
 			AllowTemplateJS:    data.Settings.AllowTemplateJS,
 			AdminPasswordHint:  data.Settings.AdminPasswordHint,
 			Locale:             data.Settings.Locale,
@@ -65,6 +68,7 @@ func (s *SettingsStore) GetSettingsRaw() models.Settings {
 	var settings models.Settings
 	s.repo.Read(func(data *repo.Data) {
 		settings = data.Settings
+		settings.TimeSlots = slices.Clone(settings.TimeSlots)
 	})
 	settings.BroadcastColumnMap = ensureBroadcastColumnMap(settings.BroadcastColumnMap)
 	if settings.DuplicateCheckDays <= 0 {

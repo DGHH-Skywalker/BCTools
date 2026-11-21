@@ -2,12 +2,11 @@ package handlers
 
 import (
 	"log"
-	"net"
 	"net/http"
 	"sync"
 	"time"
 
-	"broadcast-tool/network"
+	"broadcast-tool/internal/requestscope"
 	"broadcast-tool/response"
 )
 
@@ -57,8 +56,7 @@ func (h *LifecycleHandler) HandleWatch(w http.ResponseWriter, r *http.Request) {
 // HandleShutdown 由前端主动请求退出后端。仅允许来自本机，
 // 避免局域网内任何设备都能关掉服务。
 func (h *LifecycleHandler) HandleShutdown(w http.ResponseWriter, r *http.Request) {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !network.IsLocalhost(host) {
+	if !requestscope.Local(r) {
 		log.Printf("Shutdown request rejected from %s", r.RemoteAddr)
 		response.WriteError(w, http.StatusForbidden, "FORBIDDEN", "仅允许本机请求关闭后端")
 		return
@@ -81,8 +79,7 @@ func (h *LifecycleHandler) HandleShutdown(w http.ResponseWriter, r *http.Request
 
 // HandleCloseBrowser 保留兼容端点：只做记录，不会退出后端。
 func (h *LifecycleHandler) HandleCloseBrowser(w http.ResponseWriter, r *http.Request) {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !network.IsLocalhost(host) {
+	if !requestscope.Local(r) {
 		log.Printf("Close-browser request rejected from %s", r.RemoteAddr)
 		response.WriteError(w, http.StatusForbidden, "FORBIDDEN", "仅允许本机请求")
 		return

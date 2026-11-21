@@ -11,97 +11,70 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
-env:
-  NODE_VERSION: "24.7.0"
-  PNPM_VERSION: "10.15.1"
-  GOPROXY: "https://goproxy.cn,direct"
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and publish
-    runs-on: windows-latest
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
-          ref: ${{ github.event.inputs.tag || github.ref }}
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25.7"
-          cache-dependency-path: GoServer/go.sum
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            Web/package-lock.json
-
-      - name: Restore FFmpeg cache
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: GoServer/ffmpeg_bctools_mini/dist
-          key: ffmpeg-mini-${{ runner.os }}-${{ hashFiles('GoServer/ffmpeg_bctools_mini/build.sh') }}
-
-      - name: Install MSYS2 dependencies
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            base-devel
-            mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-nasm
-            mingw-w64-ucrt-x86_64-lame
-            git
-            make
-            pkg-config
-
-      - name: Build bundled FFmpeg
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: msys2 {0}
-        working-directory: GoServer/ffmpeg_bctools_mini
-        run: bash build.sh
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --no-progress --yes
-
-      - name: Use the pinned pnpm version
-        run: corepack install --global pnpm@${{ env.PNPM_VERSION }}
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Install Vue dependencies
-        run: npm --prefix Web ci --legacy-peer-deps
-
-      - name: Install React dependencies
-        run: corepack pnpm --dir Web/um-react install --frozen-lockfile
-
-      - name: Build
-        run: npm run build
-
-      - name: Write checksums
-        shell: bash
-        working-directory: dist
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - name: Validate release tag
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          sha256sum bctools.exe BCTools-Setup.exe > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          node - <<'JS'
+          const fs = require('node:fs')
+          const version = require('./package.json').version
+          if (!/^v[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[0-9A-Za-z.-]+)?$/.test(process.env.RELEASE_TAG) ||
+              process.env.RELEASE_TAG !== 'v' + version) {
+            throw new Error('Release tag must equal v' + version)
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'prerelease=' + version.includes('-') + '\n')
+          JS
 
+  build:
+    needs: validate
+    uses: ./.github/workflows/build.yml
+    with:
+      checkout_ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [validate, build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: bctools-windows
+          path: dist
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS.txt
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          draft: false
-          generate_release_notes: true
-          body_path: docs/releases/${{ github.event.inputs.tag || github.ref_name }}.md
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: BCTools ${{ inputs.tag || github.ref_name }}
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.validate.outputs.prerelease != 'true' }}
+          body_path: docs/releases/${{ inputs.tag || github.ref_name }}.md
+          fail_on_unmatched_files: true
           files: |
             dist/BCTools-Setup.exe
             dist/bctools.exe
+            dist/BCTools-UpdateTargets.zip
+            dist/FFmpeg-Sources.tar.gz
             dist/SHA256SUMS.txt

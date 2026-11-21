@@ -2,7 +2,9 @@ package services
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,37 @@ import (
 	"broadcast-tool/models"
 	"broadcast-tool/paths"
 )
+
+func TestSeekInMergedTrack(t *testing.T) {
+	audio := bytes.NewReader([]byte("skipFRAMESskip"))
+	part := models.MergedPart{
+		Offset: 4, Length: 6,
+		ID3v2: base64.StdEncoding.EncodeToString([]byte("header")),
+		ID3v1: base64.StdEncoding.EncodeToString([]byte("footer")),
+	}
+	content, err := mergedSongReader(audio, audio.Size(), part)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := content.Seek(4, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	segment := make([]byte, 10)
+	if _, err := io.ReadFull(content, segment); err != nil || string(segment) != "erFRAMESfo" {
+		t.Fatalf("seek across both tags: %q, %v", segment, err)
+	}
+	if _, err := content.Seek(-6, io.SeekEnd); err != nil {
+		t.Fatal(err)
+	}
+	tail, err := io.ReadAll(content)
+	if err != nil || string(tail) != "footer" {
+		t.Fatalf("end of virtual audio: %q, %v", tail, err)
+	}
+	part.Length = audio.Size()
+	if _, err := mergedSongReader(audio, audio.Size(), part); err == nil {
+		t.Fatal("accepted an out-of-bounds track")
+	}
+}
 
 func newTestLibrary(t *testing.T) (*MusicLibrary, *repo.Repository, string) {
 	t.Helper()

@@ -6,18 +6,23 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ inputs.checkout_ref || github.ref }}
   cancel-in-progress: true
 
 env:
   NODE_VERSION: "24.7.0"
   PNPM_VERSION: "10.15.1"
-  GOPROXY: "https://goproxy.cn,direct"
+  GOPROXY: "https://proxy.golang.org|https://goproxy.cn|https://mirrors.aliyun.com/goproxy|direct"
 
 jobs:
   test:
@@ -26,11 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.checkout_ref || github.ref }}
           submodules: recursive
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.7"
+          go-version: "1.26.11"
           cache-dependency-path: GoServer/go.sum
 
       - uses: actions/setup-node@v4
@@ -51,7 +57,7 @@ jobs:
         run: npm --prefix Web ci --legacy-peer-deps
 
       - name: Install React dependencies
-        run: corepack pnpm --dir Web/um-react install --frozen-lockfile
+        run: corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
 
       - name: Type checks and Go vet
         run: npm run type-check
@@ -59,14 +65,23 @@ jobs:
       - name: Frontend and Go tests
         run: npm run test
 
-      - name: React type check
-        run: corepack pnpm --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
+      - name: React type check and tests
+        run: |
+          corepack pnpm@10.15.1 --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
+          corepack pnpm@10.15.1 --dir Web/um-react test
+
+      - name: Verify generated API contracts
+        run: |
+          npm run generate:api
+          git diff --exit-code -- GoServer/internal/contracts/types.gen.go Web/src/api/generated/contracts.ts
 
   ffmpeg:
     name: Build bundled FFmpeg
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.ref }}
 
       - name: Restore FFmpeg cache
         id: cache
@@ -94,19 +109,23 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         working-directory: GoServer/ffmpeg_bctools_mini
+        env:
+          BCTOOLS_PACKAGE_FFMPEG_SOURCE: '1'
         run: bash build.sh
 
       - name: Validate bundled FFmpeg
         shell: bash
         working-directory: GoServer/ffmpeg_bctools_mini/dist
         run: |
-          ls -lh ffmpeg.exe ffprobe.exe
+          ls -lh ffmpeg.exe ffprobe.exe FFmpeg-Sources.tar.gz
           ./ffmpeg.exe -hide_banner -encoders | grep -q libmp3lame
 
       - uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-mini
-          path: GoServer/ffmpeg_bctools_mini/dist/*.exe
+          path: |
+            GoServer/ffmpeg_bctools_mini/dist/*.exe
+            GoServer/ffmpeg_bctools_mini/dist/FFmpeg-Sources.tar.gz
           retention-days: 1
 
   build:
@@ -116,11 +135,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.checkout_ref || github.ref }}
           submodules: recursive
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.7"
+          go-version: "1.26.11"
           cache-dependency-path: GoServer/go.sum
 
       - uses: actions/setup-node@v4
@@ -145,13 +165,21 @@ jobs:
         run: npm --prefix Web ci --legacy-peer-deps
 
       - name: Install React dependencies
-        run: corepack pnpm --dir Web/um-react install --frozen-lockfile
+        run: corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
 
       - name: Download bundled FFmpeg
         uses: actions/download-artifact@v4
         with:
           name: ffmpeg-mini
           path: GoServer/ffmpeg_bctools_mini/dist
+
+      - name: Configure signed update source
+        env:
+          BCTOOLS_UPDATE_REPO: ${{ vars.BCTOOLS_UPDATE_REPO }}
+          BCTOOLS_TUF_ROOT_JSON: ${{ vars.BCTOOLS_TUF_ROOT_JSON }}
+          BCTOOLS_UPDATE_BRANCH: ${{ vars.BCTOOLS_UPDATE_BRANCH }}
+          BCTOOLS_UPDATE_MIRRORS: ${{ vars.BCTOOLS_UPDATE_MIRRORS }}
+        run: node scripts/configure-update-source.cjs
 
       - name: Build
         run: npm run build
@@ -160,20 +188,37 @@ jobs:
         shell: pwsh
         run: ./scripts/test-installer.ps1
 
-      - name: List artifacts
-        shell: bash
-        run: ls -lh dist/
+      - name: Prepare update feed targets
+        shell: pwsh
+        run: ./scripts/package-update-feed.ps1
+
+      - name: Check release versions and write checksums
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $numeric = (Get-Content GoServer/versioninfo.json | ConvertFrom-Json).FixedFileInfo.FileVersion
+          $expected = "$($numeric.Major).$($numeric.Minor).$($numeric.Patch).$($numeric.Build)"
+          foreach ($name in @("bctools.exe", "BCTools-Setup.exe")) {
+            $info = (Get-Item (Join-Path dist $name)).VersionInfo
+            $actual = "$($info.FileMajorPart).$($info.FileMinorPart).$($info.FileBuildPart).$($info.FilePrivatePart)"
+            if ($actual -ne $expected -or $info.FileVersion -ne $expected -or $info.ProductVersion -ne $version) {
+              throw "$name has unexpected versions: $actual / $($info.FileVersion) / $($info.ProductVersion)"
+            }
+          }
+          Copy-Item GoServer/ffmpeg_bctools_mini/dist/FFmpeg-Sources.tar.gz dist/
+          Set-Location dist
+          $checksums = Get-FileHash -Algorithm SHA256 bctools.exe,BCTools-Setup.exe,BCTools-UpdateTargets.zip,FFmpeg-Sources.tar.gz |
+            ForEach-Object { "$($_.Hash.ToLowerInvariant())  $(Split-Path $_.Path -Leaf)" }
+          $checksums | Set-Content -Encoding ascii SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: bctools-${{ github.sha }}
-          path: dist/bctools.exe
-          if-no-files-found: error
-          retention-days: 14
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: BCTools-Setup-${{ github.sha }}
-          path: dist/BCTools-Setup.exe
+          name: bctools-windows
+          path: |
+            dist/bctools.exe
+            dist/BCTools-Setup.exe
+            dist/BCTools-UpdateTargets.zip
+            dist/FFmpeg-Sources.tar.gz
+            dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14

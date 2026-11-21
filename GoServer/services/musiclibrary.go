@@ -3,12 +3,15 @@
 package services
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"broadcast-tool/converter"
@@ -29,10 +32,30 @@ import (
 // 一切变更（增删歌、改日期/时段、改时段配置）都通过 SyncWeek 收敛到期望布局，
 // 按签名比对只重建发生变化的编号。
 type MusicLibrary struct {
+	mediaMu   sync.RWMutex
+	taskMu    sync.Mutex
+	tasks     sync.WaitGroup
+	stopping  bool
 	DataRoot  string
 	Repo      *repo.Repository
 	Converter *converter.FFMpegConverter
 	Logger    func(format string, args ...interface{})
+}
+
+func (l *MusicLibrary) ScheduleSync(run func()) {
+	l.taskMu.Lock()
+	defer l.taskMu.Unlock()
+	if l.stopping {
+		return
+	}
+	l.tasks.Go(run)
+}
+
+func (l *MusicLibrary) WaitForSync() {
+	l.taskMu.Lock()
+	l.stopping = true
+	l.taskMu.Unlock()
+	l.tasks.Wait()
 }
 
 func NewMusicLibrary(
@@ -85,7 +108,7 @@ func weekDates(weekName string) ([]string, error) {
 	if isoWd == 0 {
 		isoWd = 7
 	}
-	monday := jan4.AddDate(0, 0, -(isoWd - 1)+(week-1)*7)
+	monday := jan4.AddDate(0, 0, -(isoWd-1)+(week-1)*7)
 	dates := make([]string, 7)
 	for i := 0; i < 7; i++ {
 		dates[i] = monday.AddDate(0, 0, i).Format("2006-01-02")
@@ -112,10 +135,10 @@ func isoWeekday(dateStr string) int {
 
 // weekSlot 是期望布局里「一个时段 = 一个编号」的描述。
 type weekSlot struct {
-	Num   string        // "05"
-	Date  string        // 该时段属于周内的哪一天
+	Num    string        // "05"
+	Date   string        // 该时段属于周内的哪一天
 	SlotID string        // TimeSlot.ID
-	Songs []models.Song // 该时段的歌（按播放顺序），只含有音频文件的
+	Songs  []models.Song // 该时段的歌（按播放顺序），只含有音频文件的
 }
 
 // computeLayout 计算 weekName 的期望布局：遍历周一~周日的全部时段，按顺序编号。
@@ -215,12 +238,24 @@ func (l *MusicLibrary) AbsSongPath(rel string) string {
 
 // obtainSongSource 返回一份「只包含这首歌、带原始 ID3 标签」的独立 MP3 路径。
 //
-//	- FilePath 指向暂存区：暂存文件本身就是独立 MP3。
-//	- FilePath 指向周文件夹且该编号是单曲：文件本身。
-//	- FilePath 指向合并文件：按 Parts 信息抽出到临时文件。
+//   - FilePath 指向暂存区：暂存文件本身就是独立 MP3。
+//   - FilePath 指向周文件夹且该编号是单曲：文件本身。
+//   - FilePath 指向合并文件：按 Parts 信息抽出到临时文件。
 //
 // 返回的临时文件由调用方负责清理（cleanup 非 nil 时）。
 func (l *MusicLibrary) obtainSongSource(id int64) (path string, cleanup func(), err error) {
+	path, part, err := l.locateSongAudio(id)
+	if err != nil || part == nil {
+		return path, nil, err
+	}
+	tmpPath, err := l.extractPart(path, *part)
+	if err != nil {
+		return "", nil, err
+	}
+	return tmpPath, func() { _ = os.Remove(tmpPath) }, nil
+}
+
+func (l *MusicLibrary) locateSongAudio(id int64) (string, *models.MergedPart, error) {
 	var song models.Song
 	var found bool
 	l.Repo.Read(func(d *repo.Data) {
@@ -273,11 +308,7 @@ func (l *MusicLibrary) obtainSongSource(id int64) (path string, cleanup func(), 
 	if wf != nil && wf.Kind == models.WeekFileMerged {
 		for _, p := range wf.Parts {
 			if p.SongID == id {
-				tmpPath, extErr := l.extractPart(abs, p)
-				if extErr != nil {
-					return "", nil, extErr
-				}
-				return tmpPath, func() { os.Remove(tmpPath) }, nil
+				return abs, &p, nil
 			}
 		}
 		return "", nil, fmt.Errorf("song %d not found in merged file %s", id, song.FilePath)
@@ -290,43 +321,126 @@ func (l *MusicLibrary) obtainSongSource(id int64) (path string, cleanup func(), 
 	return abs, nil, nil
 }
 
-// SongAudioPath 返回指定宿舍歌曲的「独立 MP3」路径，供流式播放使用。
-// 合并文件的成员会按 Parts 信息抽到临时文件（cleanup 非 nil 时由调用方清理），
-// 因此同一时段多首歌也能单独试听自己那一段。
-func (l *MusicLibrary) SongAudioPath(id int64) (string, func(), error) {
-	return l.obtainSongSource(id)
+// OpenSongAudio exposes an individual MP3 and holds the media read lock until
+// the caller closes it. Merged tracks can serve byte ranges without extraction.
+func (l *MusicLibrary) OpenSongAudio(id int64) (content io.ReadSeeker, size int64, modified time.Time, close func(), err error) {
+	l.mediaMu.RLock()
+	var file *os.File
+	defer func() {
+		if err != nil {
+			if file != nil {
+				_ = file.Close()
+			}
+			l.mediaMu.RUnlock()
+		}
+	}()
+	path, part, err := l.locateSongAudio(id)
+	if err != nil {
+		return nil, 0, time.Time{}, nil, err
+	}
+	file, err = os.Open(path)
+	if err != nil {
+		return nil, 0, time.Time{}, nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return nil, 0, time.Time{}, nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, 0, time.Time{}, nil, fmt.Errorf("not a regular audio file: %s", path)
+	}
+	close = func() {
+		_ = file.Close()
+		l.mediaMu.RUnlock()
+	}
+	if part == nil {
+		return file, info.Size(), info.ModTime(), close, nil
+	}
+	section, err := mergedSongReader(file, info.Size(), *part)
+	if err != nil {
+		return nil, 0, time.Time{}, nil, err
+	}
+	return section, section.Size(), time.Time{}, close, nil
 }
 
 // extractPart 把合并文件里的一个成员还原成独立 MP3（原始标签 + 裸音频帧）。
 func (l *MusicLibrary) extractPart(mergedPath string, part models.MergedPart) (string, error) {
-	data, err := os.ReadFile(mergedPath)
+	input, err := os.Open(mergedPath)
 	if err != nil {
-		return "", fmt.Errorf("read merged file: %w", err)
+		return "", err
 	}
-	if part.Offset < 0 || part.Offset+part.Length > int64(len(data)) {
-		return "", fmt.Errorf("part range out of bounds for %s", mergedPath)
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return "", err
 	}
-	var out []byte
-	if part.ID3v2 != "" {
-		if tag, decErr := base64.StdEncoding.DecodeString(part.ID3v2); decErr == nil {
-			out = append(out, tag...)
-		}
-	}
-	out = append(out, data[part.Offset:part.Offset+part.Length]...)
-	if part.ID3v1 != "" {
-		if tag, decErr := base64.StdEncoding.DecodeString(part.ID3v1); decErr == nil {
-			out = append(out, tag...)
-		}
+	section, err := mergedSongReader(input, info.Size(), part)
+	if err != nil {
+		return "", err
 	}
 	tmpDir := paths.GetTempDir(l.DataRoot)
 	if err := paths.EnsureDir(tmpDir); err != nil {
 		return "", err
 	}
-	tmpPath := filepath.Join(tmpDir, fmt.Sprintf("extract-%d-%d.mp3", part.SongID, time.Now().UnixNano()))
-	if err := os.WriteFile(tmpPath, out, 0644); err != nil {
-		return "", fmt.Errorf("write extracted part: %w", err)
+	tmp, err := os.CreateTemp(tmpDir, "extract-*.mp3")
+	if err != nil {
+		return "", err
 	}
+	ok := false
+	defer func() {
+		_ = tmp.Close()
+		if !ok {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+	if _, err := io.CopyN(tmp, section, section.Size()); err != nil {
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	ok = true
+	tmpPath := tmp.Name()
 	return tmpPath, nil
+}
+
+func mergedSongReader(audio io.ReaderAt, size int64, part models.MergedPart) (*io.SectionReader, error) {
+	if part.Offset < 0 || part.Length < 0 || part.Offset > size || part.Length > size-part.Offset {
+		return nil, fmt.Errorf("song %d audio range is outside the merged file", part.SongID)
+	}
+	tagReader := func(encoded string) *io.SectionReader {
+		tag, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			tag = nil
+		}
+		return io.NewSectionReader(bytes.NewReader(tag), 0, int64(len(tag)))
+	}
+	header, footer := tagReader(part.ID3v2), tagReader(part.ID3v1)
+	sections := songSections{header, io.NewSectionReader(audio, part.Offset, part.Length), footer}
+	return io.NewSectionReader(sections, 0, header.Size()+part.Length+footer.Size()), nil
+}
+
+type songSections [3]*io.SectionReader
+
+func (s songSections) ReadAt(p []byte, off int64) (int, error) {
+	total := 0
+	for _, section := range s {
+		if off >= section.Size() {
+			off -= section.Size()
+			continue
+		}
+		n, err := section.ReadAt(p, off)
+		total += n
+		p = p[n:]
+		if err != nil && (err != io.EOF || int64(n) != section.Size()-off) {
+			return total, err
+		}
+		if len(p) == 0 {
+			return total, nil
+		}
+		off = 0
+	}
+	return total, io.EOF
 }
 
 // ---------------------------------------------------------------------------
@@ -411,7 +525,25 @@ func (l *MusicLibrary) buildMerged(songs []models.Song, outPath string) ([]model
 //  3. 该周不再被引用的旧编号删除；
 //  4. 临时文件改名就位；
 //  5. 一次性写回 data.json：新索引 + 该周歌曲的 FilePath + 孤儿歌的暂存迁移。
+func (l *MusicLibrary) CollectRetiredSongs(now time.Time) error {
+	l.mediaMu.Lock()
+	defer l.mediaMu.Unlock()
+	return l.Repo.Collect(now)
+}
+
+func (l *MusicLibrary) RestoreRetiredSongs(id string, now time.Time) error {
+	l.mediaMu.Lock()
+	defer l.mediaMu.Unlock()
+	return l.Repo.RestoreRecovery(id, now)
+}
+
 func (l *MusicLibrary) SyncWeek(weekName string) error {
+	l.mediaMu.Lock()
+	defer l.mediaMu.Unlock()
+	return l.syncWeek(weekName)
+}
+
+func (l *MusicLibrary) syncWeek(weekName string) error {
 	slots, err := l.computeLayout(weekName)
 	if err != nil {
 		return err
@@ -439,10 +571,10 @@ func (l *MusicLibrary) SyncWeek(weekName string) error {
 	}
 
 	type result struct {
-		num    string
-		file   models.WeekFile
-		tmp    string // 构建产物（.tmp-NN.mp3）；keep 时为空
-		keep   bool
+		num  string
+		file models.WeekFile
+		tmp  string // 构建产物（.tmp-NN.mp3）；keep 时为空
+		keep bool
 	}
 	var results []result
 
@@ -509,60 +641,49 @@ func (l *MusicLibrary) SyncWeek(weekName string) error {
 		}
 	}
 	var relocations []relocation
-	l.Repo.Read(func(d *repo.Data) {
-		for _, s := range d.DormSongs {
-			if s.FilePath == "" || desiredSongIDs[s.ID] {
-				continue
-			}
-			if !strings.HasPrefix(filepath.ToSlash(s.FilePath), weekName+"/") {
-				continue
-			}
-			srcPath := l.AbsSongPath(s.FilePath)
-			if _, statErr := os.Stat(srcPath); statErr != nil {
-				continue // 文件已经不在了，无从抽取
-			}
-			// 单曲直接搬；合并成员抽出自己的部分
-			standalone, cleanup, srcErr := l.obtainSongSource(s.ID)
-			if srcErr != nil {
-				continue
-			}
-			staging := paths.GetSongStagingDir(l.DataRoot)
-			_ = paths.EnsureDir(staging)
-			stageName := fmt.Sprintf("song-%d.mp3", s.ID)
-			stagePath := filepath.Join(staging, stageName)
-			cpErr := converter.CopyFile(standalone, stagePath)
-			if cleanup != nil {
-				cleanup()
-			}
-			if cpErr != nil {
-				continue
-			}
-			relocations = append(relocations, relocation{songID: s.ID, newPath: stageName})
-		}
-	})
-
-	// 删除不再需要的旧编号文件
-	for num := range current {
-		if desiredNums[num] {
+	var songs []models.Song
+	l.Repo.Read(func(d *repo.Data) { songs = d.DormSongs })
+	for _, s := range songs {
+		if s.FilePath == "" || desiredSongIDs[s.ID] {
 			continue
 		}
-		os.Remove(filepath.Join(weekDir, num+".mp3"))
+		if !strings.HasPrefix(filepath.ToSlash(s.FilePath), weekName+"/") {
+			continue
+		}
+		srcPath := l.AbsSongPath(s.FilePath)
+		if _, statErr := os.Stat(srcPath); statErr != nil {
+			continue // 文件已经不在了，无从抽取
+		}
+		// 单曲直接搬；合并成员抽出自己的部分
+		standalone, cleanup, srcErr := l.obtainSongSource(s.ID)
+		if srcErr != nil {
+			continue
+		}
+		staging := paths.GetSongStagingDir(l.DataRoot)
+		_ = paths.EnsureDir(staging)
+		stageName := fmt.Sprintf("song-%d.mp3", s.ID)
+		stagePath := filepath.Join(staging, stageName)
+		cpErr := converter.CopyFile(standalone, stagePath)
+		if cleanup != nil {
+			cleanup()
+		}
+		if cpErr != nil {
+			continue
+		}
+		relocations = append(relocations, relocation{songID: s.ID, newPath: stageName})
 	}
 
-	// 临时文件就位
-	for _, r := range results {
-		if r.keep || r.tmp == "" {
-			continue
-		}
-		final := filepath.Join(weekDir, r.num+".mp3")
-		os.Remove(final)
-		if err := os.Rename(r.tmp, final); err != nil {
-			return fmt.Errorf("place file %s: %w", final, err)
+	var moves []repo.FileMove
+	for _, result := range results {
+		if !result.keep && result.tmp != "" {
+			from, _ := filepath.Rel(l.DataRoot, result.tmp)
+			to, _ := filepath.Rel(l.DataRoot, filepath.Join(weekDir, result.num+".mp3"))
+			moves = append(moves, repo.FileMove{From: from, To: to})
 		}
 	}
 
 	// 写回索引与歌曲 FilePath
-	err = l.Repo.Write(func(d *repo.Data) error {
+	err = l.Repo.WriteWithMoves(func(d *repo.Data) error {
 		if d.Weeks == nil {
 			d.Weeks = make(map[string]map[string]models.WeekFile)
 		}
@@ -588,12 +709,25 @@ func (l *MusicLibrary) SyncWeek(weekName string) error {
 			}
 		}
 		return nil
-	})
+	}, moves)
 	if err != nil {
 		return err
 	}
 
-	l.cleanupStaging()
+	for number := range current {
+		if !desiredNums[number] {
+			_ = os.Remove(filepath.Join(weekDir, number+".mp3"))
+		}
+	}
+	knownStaged := make(map[string]bool)
+	for _, slot := range slots {
+		for _, song := range slot.Songs {
+			if !strings.ContainsAny(song.FilePath, `/\`) {
+				knownStaged[song.FilePath] = true
+			}
+		}
+	}
+	l.cleanupStaging(knownStaged)
 	return nil
 }
 
@@ -603,7 +737,7 @@ func (l *MusicLibrary) SyncAll() error {
 	weekSet := make(map[string]bool)
 	l.Repo.Read(func(d *repo.Data) {
 		for _, s := range d.DormSongs {
-			if name, err := WeekNameForDate(s.Date); err == nil {
+			if name, err := WeekNameForDate(s.Date); err == nil && s.FilePath != "" {
 				weekSet[name] = true
 			}
 		}
@@ -635,7 +769,7 @@ func (l *MusicLibrary) SyncSongWeek(song models.Song) error {
 }
 
 // cleanupStaging 删除暂存区里已没有任何歌曲引用的文件。
-func (l *MusicLibrary) cleanupStaging() {
+func (l *MusicLibrary) cleanupStaging(knownStaged map[string]bool) {
 	staging := paths.GetSongStagingDir(l.DataRoot)
 	entries, err := os.ReadDir(staging)
 	if err != nil {
@@ -657,8 +791,10 @@ func (l *MusicLibrary) cleanupStaging() {
 		}
 	})
 	for _, e := range entries {
-		if !e.IsDir() && !referenced[e.Name()] {
-			os.Remove(filepath.Join(staging, e.Name()))
+		if e.Type().IsRegular() && !referenced[e.Name()] {
+			if info, err := e.Info(); err == nil && (knownStaged[e.Name()] || time.Since(info.ModTime()) > 24*time.Hour) {
+				_ = os.Remove(filepath.Join(staging, e.Name()))
+			}
 		}
 	}
 }
@@ -678,7 +814,9 @@ type ExportWeekResult struct {
 // ExportWeekToDesktop 先 SyncWeek 保证周文件夹为最终形态，再把整个周文件夹
 // 复制到桌面。桌面已存在同名文件夹时，confirm=false 返回待覆盖文件列表。
 func (l *MusicLibrary) ExportWeekToDesktop(weekName string, confirm bool) (*ExportWeekResult, error) {
-	if err := l.SyncWeek(weekName); err != nil {
+	l.mediaMu.Lock()
+	defer l.mediaMu.Unlock()
+	if err := l.syncWeek(weekName); err != nil {
 		return nil, fmt.Errorf("同步周文件夹失败: %w", err)
 	}
 
@@ -729,7 +867,7 @@ func copyDirFiles(srcDir, dstDir string) (int, error) {
 	}
 	count := 0
 	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+		if !e.Type().IsRegular() || !strings.EqualFold(filepath.Ext(e.Name()), ".mp3") || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 		src := filepath.Join(srcDir, e.Name())

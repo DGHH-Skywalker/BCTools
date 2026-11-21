@@ -4,6 +4,7 @@
       <n-dialog-provider>
         <n-notification-provider>
           <router-view />
+          <n-alert v-if="announcement && isHome" type="info">{{ announcement }}</n-alert>
           <UpdateLogNotice />
           <AudioPlayerWidget v-show="!isHome" />
           <AppHeartbeat />
@@ -14,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed, watch } from "vue"
+import { onMounted, onUnmounted, computed, watch } from "vue"
 import { useRoute } from "vue-router"
 import { NConfigProvider, NMessageProvider, NDialogProvider, NNotificationProvider } from "naive-ui"
 import { domToPng } from "modern-screenshot"
@@ -22,9 +23,10 @@ import { loadAppConfig, useAppConfig } from "./composables/useAppConfig"
 import { useTheme } from "./composables/useTheme"
 import AudioPlayerWidget from "./components/common/AudioPlayerWidget.vue"
 import AppHeartbeat from "./components/common/AppHeartbeat.vue"
+import { resources, refreshExtensions, checkWebRevision } from "./api/extensions"
 import UpdateLogNotice from "./components/common/UpdateLogNotice.vue"
 
-const { config } = useAppConfig()
+const { applyResourceConfig } = useAppConfig()
 const route = useRoute()
 const isHome = computed(() => route.path === "/home")
 const { themeOverrides, theme, isDark, applyTheme } = useTheme()
@@ -37,10 +39,22 @@ watch(
   { immediate: true },
 )
 
+const announcement = computed(() => Object.values(resources.value).find(resource => resource.announcement)?.announcement)
+let extensionTimer: ReturnType<typeof setInterval> | undefined
+async function refreshRuntime() {
+  await refreshExtensions()
+  const overrides = Object.assign({}, ...Object.keys(resources.value).sort().map(id => resources.value[id].config || {}))
+  applyTheme(applyResourceConfig(overrides).themeColor)
+  await checkWebRevision()
+}
+onUnmounted(() => clearInterval(extensionTimer))
+
 onMounted(async () => {
   document.title = "小播点歌工具"
   const cfg = await loadAppConfig()
   applyTheme(cfg.themeColor)
+  void refreshRuntime().catch(() => {})
+  extensionTimer = setInterval(() => void refreshRuntime().catch(() => {}), 10000)
   try {
     const div = document.createElement("div")
     div.style.cssText = "width:1px;height:1px;opacity:0;position:fixed;top:-999px"

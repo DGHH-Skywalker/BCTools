@@ -57,6 +57,8 @@ import { useAppConfig } from "../composables/useAppConfig"
 import { useAudioPlayer } from "../composables/useAudioPlayer"
 import type { MenuOption } from "naive-ui"
 import { Clipboard, Broadcast, Export, FolderOpen, Setting, HamburgerButton, Music, Phone, Key } from "@icon-park/vue-next"
+import { activePlugins } from "../api/extensions"
+import { openUnlockWindow } from "../utils/desktop"
 import { openSettingsWindow } from "../utils/settingsWindow"
 
 const router = useRouter(); const route = useRoute()
@@ -81,7 +83,19 @@ const routeMenuOptions: MenuOption[] = [
   { key: "/settings", label: () => t("nav.settings"), icon: () => h(Setting, iconProps as any) },
   { key: "/mobile", label: () => t("nav.mobile"), icon: () => h(Phone, iconProps as any) },
 ]
-const menuOptions = computed((): MenuOption[] => routeMenuOptions)
+const menuOptions = computed((): MenuOption[] => {
+  const layout = activePlugins.value.layout
+  const options: MenuOption[] = layout
+    ? [...layout.navigation.map(link => ({ key: link.path, label: link.label })), ...routeMenuOptions.filter(option => option.key === "um-react" || option.key === "/settings")]
+    : [...routeMenuOptions]
+  for (const plugin of activePlugins.value.plugins) {
+    if (!plugin.enabled) continue
+    for (const link of plugin.manifest.menu || []) {
+      if (!options.some(option => option.key === link.path)) options.push({ key: link.path, label: link.label })
+    }
+  }
+  return options
+})
 
 const visibleMenuOptions = computed((): MenuOption[] => menuOptions.value)
 const activeKey = computed(() => route.matched[0]?.path || route.path)
@@ -89,7 +103,7 @@ const isHome = computed(() => route.path === "/home")
 // um-react 由后端 /um-react/* 托管的独立页面，只能在新标签页打开，不走前端路由
 function onMenuChange(key: string) {
   if (key === "um-react") {
-    window.open("/um-react/", "_blank")
+    openUnlockWindow()
     return
   }
   if (key === "/settings") {
@@ -101,7 +115,7 @@ function onMenuChange(key: string) {
 function onMobileMenuChange(key: string) {
   mobileMenuOpen.value = false
   if (key === "um-react") {
-    window.open("/um-react/", "_blank")
+    openUnlockWindow()
     return
   }
   if (key === "/settings") {

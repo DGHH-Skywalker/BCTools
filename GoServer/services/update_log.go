@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/mod/semver"
 	"io"
 	"net/url"
 	"os"
@@ -33,7 +34,7 @@ const (
 //go:embed update_log_default.json
 var updateLogAssets embed.FS
 
-var updateLogVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?$`)
+var updateLogVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[0-9A-Za-z.-]+)?$`)
 
 // UpdateLog is the only update-log shape exposed to the rest of the backend.
 // Values from disk reach this type only after signature and schema validation.
@@ -230,24 +231,34 @@ func isOlderUpdateLog(candidate, fallback UpdateLog) bool {
 }
 
 func compareVersions(left, right string) int {
-	leftParts := strings.Split(left, ".")
-	rightParts := strings.Split(right, ".")
-	length := len(leftParts)
-	if len(rightParts) > length {
-		length = len(rightParts)
+	normalize := func(value string) string {
+		core, suffix, hasSuffix := strings.Cut(value, "-")
+		parts := strings.Split(core, ".")
+		if len(parts) == 4 && parts[3] == "0" {
+			core = strings.Join(parts[:3], ".")
+		}
+		if hasSuffix {
+			core += "-" + suffix
+		}
+		return "v" + core
 	}
-	for index := 0; index < length; index++ {
-		leftValue, rightValue := 0, 0
-		if index < len(leftParts) {
-			leftValue, _ = strconv.Atoi(leftParts[index])
+	lv, rv := normalize(left), normalize(right)
+	if semver.IsValid(lv) && semver.IsValid(rv) {
+		return semver.Compare(lv, rv)
+	}
+	leftParts, rightParts := strings.Split(left, "."), strings.Split(right, ".")
+	for i := 0; i < max(len(leftParts), len(rightParts)); i++ {
+		a, b := 0, 0
+		if i < len(leftParts) {
+			a, _ = strconv.Atoi(leftParts[i])
 		}
-		if index < len(rightParts) {
-			rightValue, _ = strconv.Atoi(rightParts[index])
+		if i < len(rightParts) {
+			b, _ = strconv.Atoi(rightParts[i])
 		}
-		if leftValue < rightValue {
+		if a < b {
 			return -1
 		}
-		if leftValue > rightValue {
+		if a > b {
 			return 1
 		}
 	}

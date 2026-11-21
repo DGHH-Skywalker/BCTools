@@ -2,7 +2,7 @@
 
 面向校园广播站的本地点歌与歌单管理工具。单文件 `.exe`，双击即用，数据全部留在本机。
 
-![版本](https://img.shields.io/badge/version-5.6.0.0-0086C3)
+![版本](https://img.shields.io/badge/version-6.0.0--beta1-0086C3)
 ![平台](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
 ![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white)
@@ -31,11 +31,12 @@ BCTools 把这套流程做成了：
 | `BCTools-Setup.exe` | 安装程序（推荐） |
 | `bctools.exe` | 免安装单文件版 |
 
-运行后自动打开浏览器访问 `http://localhost:1743/`，托盘会出现图标。
+双击默认打开浏览器访问 `http://localhost:1743/`。执行 `bctools.exe desktop` 可用 WebView2 独立窗口。两种方式共用数据，局域网设备可继续扫码打开网页。
 **右键**菜单可退出后端。
 
-> 内置精简版 ffmpeg/ffprobe，无需另装。首次运行会释放到
-> `%APPDATA%\BroadcastTool\bin`。
+> 内置精简版 ffmpeg/ffprobe，无需另装。首次运行会释放到程序旁的 `BctoolData\bin`。
+
+新版在设置页提供歌曲保留期、七天回收区、插件和更新管理。开放接口契约可从 `/api/v1/openapi.json` 读取。更新发布配置见 [签名更新](docs/SIGNED_UPDATES.md)。
 
 ## 功能一览
 
@@ -53,27 +54,25 @@ BCTools 把这套流程做成了：
 
 - **前端**：Vue 3 + TypeScript + Vite + Naive UI + Pinia + vue-router（hash 模式）
 - **后端**：Go + chi/v5 + `embed.FS`（前端与 ffmpeg 全部嵌进单个 exe）
-- **托盘**：`fyne.io/systray`（纯 Go，无需 cgo）
+- **桌面**：Wails v3 + WebView2，浏览器模式沿用 `fyne.io/systray`
 - **音频**：内嵌精简版 ffmpeg/ffprobe；`.ncm` 等解密复用
   [unlock-music](https://git.unlock-music.dev/um/cli) 解码器
-- **安装程序**：C++ Win32/GDI+ 手写（`installer/`）
+- **安装程序**：Inno Setup 6（`installer/BCTools.iss`）
 
 ## 从源码构建
 
-需要：Go 1.22+、Node.js 24+、corepack（自带的，无需另装）、Windows。
-构建安装程序还需 MinGW-w64（`g++` 在 PATH 中）。构建只使用根目录的 npm
-脚本，无需 Python。
+Windows 构建使用 Go 1.26.11、Node.js 24、Corepack 和 Inno Setup 6。完整构建前需准备仓库的精简版 FFmpeg；GitHub Actions 会完成这一步。
 
 ```bash
 git clone <repo-url> BCTools      # 5.6.0 起 um-react 已直接放进仓库，无需 --recursive
 cd BCTools
-npm install                       # 根 devDependencies（concurrently）
-npm --prefix Web install --legacy-peer-deps
-corepack pnpm --dir Web/um-react install --no-frozen-lockfile
+npm ci
+npm --prefix Web ci --legacy-peer-deps
+corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
 npm run build                     # 并行准备前端 / um-react / ffmpeg，再编译主程序与安装包
 ```
 
-> 完整步骤、产物清单、版本号改哪几处等见 [DEVELOPER.md](./DEVELOPER.md)。
+> 构建与发版见 [开发指南](./DEVELOPER.md)，迁移验证见 [Beta 审查](docs/BETA1_REVIEW.md)。
 ```
 
 产物输出到 `dist/`：

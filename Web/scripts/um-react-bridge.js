@@ -109,6 +109,15 @@
         if (!data || !data.stageId) throw new Error("上传响应无效");
         // Open the main app's import page in its own tab; um-react stays open.
         // A named tab is reused for successive imports so no tab accumulates.
+        if (location.hostname === "wails.localhost" || location.hostname.startsWith("wails.localhost.")) {
+          return fetch("/api/desktop/window?view=import&stage=" + encodeURIComponent(data.stageId), {
+            method: "POST", headers: { "X-BCTools-Local": "1" }
+          }).then(function (res) {
+            if (!res.ok) throw new Error("无法打开导入页面");
+            setBusy(btn, "等待导入…", true);
+            startPolling(data.stageId, btn, fileName);
+          });
+        }
         var opened = window.open(IMPORT_URL + encodeURIComponent(data.stageId), IMPORT_TAB_NAME);
         if (!opened) {
           alert("无法打开导入页面，请允许本站的弹出式窗口后重试。");
