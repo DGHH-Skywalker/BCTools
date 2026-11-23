@@ -1,66 +1,73 @@
-# ffmpeg_bctools_mini
+# 精简 FFmpeg
 
-BroadcastTool 的精简版 ffmpeg/ffprobe，只保留项目用到的音频编解码能力。
-
-## 目标
-
-- 把完整版 ffmpeg（约 230 MB）裁剪到 10–25 MB 级别。
-- 零外部 DLL 依赖，单个文件夹即可独立运行。
-- 可直接随 [BroadcastTool](https://github.com/your-repo/BroadcastTool) 一起分发，也可以单独拆出来开源。
+该目录为 BCTools 构建 Windows 版 `ffmpeg.exe` 和 `ffprobe.exe`，只保留歌曲导入、信息读取、转码与静音生成所需能力。
 
 ## 保留能力
 
 | 类别 | 内容 |
-|------|------|
+| --- | --- |
 | 输出编码 | MP3（libmp3lame） |
 | 输入解码 | MP3、FLAC、WAV、AAC/M4A、ALAC、Ogg Vorbis、Opus、WMA、PCM |
-| 滤镜 | `anullsrc`（静音生成）、`aformat`、`aresample` |
+| 滤镜 | `anullsrc`、`aformat`、`aresample` |
 | 输入设备 | `lavfi` |
 | 协议 | `file` |
 | 工具 | `ffmpeg`、`ffprobe` |
 
-其余视频、字幕、网络、ffplay 等全部移除。
+视频、字幕、网络协议、ffplay 和项目未使用的组件会被裁掉。MP3 合并不依赖这里的 concat 组件，相关处理在 BCTools 的 Go 代码中完成。
 
 ## 构建环境
 
-Windows + MSYS2 UCRT64：
+在 Windows 的 MSYS2 UCRT64 中安装依赖：
 
 ```bash
 pacman -Syu
-pacman -S --needed base-devel mingw-w64-ucrt-x86_64-toolchain \
+pacman -S --needed base-devel \
+  mingw-w64-ucrt-x86_64-toolchain \
   mingw-w64-ucrt-x86_64-nasm \
   curl zstd git make pkg-config
 ```
 
-> 国内用户建议先把 MSYS2 源换成清华镜像，再安装依赖。
+构建脚本会获取固定版本的 FFmpeg 源码，并校验配套 LAME 静态库。
 
 ## 构建
 
+从仓库根目录进入本目录：
+
 ```bash
-cd ffmpeg_bctools_mini
+cd GoServer/ffmpeg_bctools_mini
 bash build.sh
 ```
 
-构建完成后产物在 `dist/`：
+产物写入 `dist/`，至少包括：
 
 ```text
-dist/
-├── ffmpeg.exe
-├── ffprobe.exe
-└── COPYING.*
+ffmpeg.exe
+ffprobe.exe
+COPYING.*
 ```
 
-构建脚本会校验固定版本的 UCRT64 LAME 静态库，并在临时目录中使用。
+设置以下环境变量时，还会生成发布所需的完整对应源码包：
 
-## 集成到 BroadcastTool
+```bash
+BCTOOLS_PACKAGE_FFMPEG_SOURCE=1 bash build.sh
+```
 
-根目录 `npm run build` 会从 `ffmpeg_bctools_mini/dist/` 复制 `ffmpeg.exe` 和 `ffprobe.exe` 到 Go 的嵌入目录，最终随 `bctools.exe` 一起分发。
+源码包为 `dist/FFmpeg-Sources.tar.gz`，包含固定提交的 FFmpeg 源码、对应 LAME 源码包、构建脚本和许可证。
 
-也可以手动复制，或直接把 `ffmpeg_bctools_mini/dist` 加到 PATH。
+## 集成到 BCTools
+
+仓库根目录的以下命令会复制二进制到 Go 嵌入目录：
+
+```bash
+npm run build:inject-ffmpeg
+```
+
+完整 `npm run build` 已包含该步骤。主程序运行时再将工具释放到 `BctoolData/bin`。
+
+GitHub Actions 独立构建并缓存 FFmpeg，再将产物交给 Windows 应用构建。缓存键包含 `build.sh` 的摘要，构建脚本变化后会重新编译。
 
 ## 许可证
 
-- 本仓库中的构建脚本、文档采用 MIT 许可证（见 `LICENSE`）。
-- 编译后的 `ffmpeg.exe` / `ffprobe.exe` 二进制遵循 ffmpeg 原许可证。由于启用了 `libmp3lame` 并打开了 `--enable-gpl --enable-version3`，生成物为 **GPLv3**。
-- 分发时请务必附带 `dist/COPYING*` 许可证文件。
-- GitHub Actions 设置 `BCTOOLS_PACKAGE_FFMPEG_SOURCE=1`，生成随 Release 分发的 `FFmpeg-Sources.tar.gz`，其中包含固定提交的 FFmpeg 源码、对应 LAME 源码包、构建脚本及许可证。
+本目录的构建脚本和文档采用 MIT 许可证。编译后的 FFmpeg、ffprobe 因启用 `libmp3lame`、`--enable-gpl` 和 `--enable-version3`，生成物按 GPLv3 分发。
+
+分发二进制时必须同时提供对应源码和许可证。Release 工作流会发布 `FFmpeg-Sources.tar.gz`，不要只复制 EXE 而省略源码包。
