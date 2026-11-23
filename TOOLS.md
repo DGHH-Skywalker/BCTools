@@ -1,134 +1,137 @@
-# 本机工具链备忘（Windows / 2026-08）
+# 构建工具与排障
 
-仓库 `E:\BCTools3` 现在能在一台**裸 Windows** 上用 `npm run build` 端到端出 `dist/bctools.exe` + `dist/BCTools-Setup.exe`。本文件记录装在哪、用什么镜像、踩过的坑与对应处理。
+本文记录 Windows 构建所需的工具版本和可复现的排障方法。具体路径以本机安装位置为准，不要把某一台电脑上的盘符或用户目录写进构建脚本。
 
-## 1. 工具链位置
+## 工具版本
 
-| 工具 | 位置 | 来源 | 备注 |
-|------|------|------|------|
-| Node.js 24.19 | `C:\Program Files\nodejs\` | 预装 | — |
-| npm | 同上 | 预装 | 镜像见下 |
-| pnpm 10.15.1 | `C:\Users\Administrator\AppData\Roaming\npm\pnpm.ps1` | `npm i -g pnpm@10.15.1` | **必须 10.x**；11+ 不读 `package.json#pnpm.overrides`（警告：`The "pnpm" field in package.json is no longer read`），会让 `um-react` 构建时拿到新版破坏性依赖 |
-| Python 3.7.6 | `C:\Users\Administrator\anaconda3\` | 预装 | — |
-| Go 1.25.0 | `E:\Tools\go\` | `https://golang.google.cn/dl/go1.25.0.windows-amd64.zip` | 写 `GOROOT=E:\Tools\go`、`GOPATH=E:\Tools\go-gopath` |
-| MinGW-w64 14.2 (UCRT, posix-seh) | `E:\Tools\mingw64\` | `https://ghfast.top/https://github.com/niXman/mingw-builds-binaries/releases/download/14.2.0-rt_v12-rev2/x86_64-14.2.0-release-posix-seh-ucrt-rt_v12-rev2.7z` | 仅 `BCTools-Setup.exe` 用，`g++` + `mingw32-make` 即可 |
-| 7-Zip 解压器 | `E:\Tools\7zr.exe` | `https://www.7-zip.org/a/7zr.exe` | 仅用于解压上面的 .7z；PowerShell 5.1 不带 7z |
-| MinGit 2.50 | `E:\Tools\mingit\cmd\git.exe` | `https://npmmirror.com/mirrors/git-for-windows/v2.50.1.windows.1/MinGit-2.50.1-64-bit.zip` | 给 pnpm `simple-git-hooks` + Vite 用，`simple-git-hooks prepare` 没有 git 会报 `'git' is not recognized` |
-| ffmpeg 精简版 | `E:\BCTools3\GoServer\ffmpeg_bctools_mini\dist\` | 仓库自带 | 不用动 |
+| 工具 | 项目使用版本 | 检查命令 |
+| --- | --- | --- |
+| Node.js | 24，CI 为 24.7.0 | `node --version` |
+| npm | Node.js 自带 | `npm --version` |
+| pnpm | 10.15.1 | `corepack pnpm@10.15.1 --version` |
+| Go | 1.26.11 | `go version` |
+| Git | 当前稳定版 | `git --version` |
+| Inno Setup | 6 | 检查 `ISCC.exe`，或运行 `npm run build:installer` |
+| MSYS2 UCRT64 | 当前版本 | 仅重新构建 FFmpeg 时需要 |
 
-> `E:\Tools\go\bin;E:\Tools\mingw64\bin;E:\Tools\mingit\cmd` 三个目录已加入 **User** 环境 `PATH`（`[Environment]::SetEnvironmentVariable('PATH', ..., 'User')`），新 shell 自动可用。
+安装包已经改用 Inno Setup。构建主程序和安装包不需要 MinGW；`installer/src/` 中的旧 C++ 安装器不参与当前构建。
 
-## 2. 镜像源
+## 依赖安装
 
-| 工具 | 源 | 配置 |
-|------|----|------|
-| npm | `https://registry.npmmirror.com` | `npm config get registry` 默认就是这台机器上 |
-| pnpm | `https://registry.npmmirror.com` | `pnpm config set registry https://registry.npmmirror.com` |
-| Go module | `https://goproxy.cn,direct` | `GOPROXY=https://goproxy.cn,direct`、`GOSUMDB=off`（`go env -w` 持久化） |
-| MinGW 镜像 | `https://ghfast.top/https://github.com/...` | ghfast.top 是 GitHub 加速；直连 github.com 在国内慢 |
-| 7-Zip | `https://www.7-zip.org/a/7zr.exe` | 主源，国外但文件小；不行就 `cnblogs` / 阿里云的镜像源搜 `7zr.exe` |
+在仓库根目录执行：
 
-## 3. 关键环境变量（已持久化到 User）
+```powershell
+npm ci
+npm --prefix Web ci --legacy-peer-deps
+corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
+```
+
+网络环境需要镜像时，可分别为 npm、pnpm 和 Go 配置镜像。Go 校验数据库保持默认开启，不要为了绕过网络问题关闭 `GOSUMDB`。
+
+```powershell
+npm config set registry https://registry.npmmirror.com
+corepack pnpm@10.15.1 config set registry https://registry.npmmirror.com
+go env -w GOPROXY=https://goproxy.cn,direct
+```
+
+镜像只影响依赖下载，不改变锁文件要求的版本和完整性校验。
+
+## 构建入口
+
+```powershell
+npm run dev
+npm run test
+npm run type-check
+npm run build
+```
+
+完整构建前，确认以下文件存在：
 
 ```text
-PATH = E:\Tools\go\bin;E:\Tools\mingw64\bin;E:\Tools\mingit\cmd;<原 PATH>
-GOROOT = E:\Tools\go
-GOPATH = E:\Tools\go-gopath
-GO111MODULE = on
-GOPROXY = https://goproxy.cn,direct
-GOSUMDB = off
+GoServer/ffmpeg_bctools_mini/dist/ffmpeg.exe
+GoServer/ffmpeg_bctools_mini/dist/ffprobe.exe
 ```
 
-新 PowerShell 窗口 / VS Code 终端开起来就有；当前会话跑下面这条强制刷新：
+缺少它们时，`build:inject-ffmpeg` 会失败。可按 [FFmpeg 构建说明](../BCTools/GoServer/ffmpeg_bctools_mini/README.md) 重新构建；直接阅读仓库文档时使用 [该目录](GoServer/ffmpeg_bctools_mini/README.md)。
+
+## 常见问题
+
+### pnpm 安装后依赖版本异常
+
+um-react 在 `package.json` 中使用 `pnpm.overrides` 和补丁。请通过 Corepack 固定到 pnpm 10.15.1，不要换成其他主版本。
 
 ```powershell
-$env:PATH = [System.Environment]::GetEnvironmentVariable('PATH', 'User')
+Remove-Item Web/um-react/node_modules -Recurse -Force
+corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
 ```
 
-## 4. 端到端构建（裸机步骤）
+如果之前从另一台电脑复制过 `node_modules`，先删除再安装。依赖目录包含本机路径和平台二进制，不适合直接迁移。
+
+### `@swc/core` 或 top-level-await 构建报错
+
+um-react 当前通过 pnpm override 固定 `@swc/core`，并将 Vite 构建目标设为 `es2022`。升级 Vite、`vite-plugin-top-level-await` 或 SWC 时，应一起检查这两项配置，不要只删除锁文件重试。
+
+### `simple-git-hooks` 提示找不到 Git
+
+安装 Git 并确保 `git.exe` 在 `PATH` 中，然后重新运行 pnpm 安装。该步骤来自 um-react 的 `prepare` 脚本。
+
+### 找不到 `ISCC.exe`
+
+安装 Inno Setup 6。使用非默认安装位置时，设置 `ISCC_PATH` 为 `ISCC.exe` 的完整路径：
 
 ```powershell
-# 一次性：装好 pnpm 10、Go 1.25、MinGW、MinGit
-npm i -g pnpm@10.15.1
-
-cd E:\BCTools3
-npm install                                     # 根 + 子项目 deps（npmmirror 镜像）
-Set-Location Web\um-react
-pnpm install                                    # pnpm 10，会读 package.json#pnpm.overrides
-Set-Location E:\BCTools3
-npm run build                                   # 完整链路
+$env:ISCC_PATH = 'D:\Tools\Inno Setup 6\ISCC.exe'
+npm run build:installer
 ```
 
-`npm run build` 顺序：
+### 桌面模式提示缺少 WebView2
 
-1. `build:web` — Vite 构建主前端 + 字体子集化
-2. `build:copy` — 复制 `Web/dist` → `GoServer/embed/dist`
-3. `build:um-react` — Vite 构建 Unlock Music → `GoServer/embed/um-react`
-4. `build:inject-ffmpeg` — 复制精简版 ffmpeg/ffprobe → `GoServer/internal/binembed/bin`
-5. `build:server` — `go build` 出 `dist/bctools.exe`（嵌入前端 + um-react + ffmpeg）
-6. `build:installer` — MinGW 编译安装程序 → `dist/BCTools-Setup.exe`
-
-## 5. 已踩的坑与修复
-
-### 5.1 Go 缺失 / `go.mod` 1.25.0
-
-`go.mod` 写 `go 1.25.0`，没装 Go 直接 `go build` 报"未知命令"。
-
-- **修**：从 `https://golang.google.cn/dl/`（Google 国内 CDN）拉 `go1.25.0.windows-amd64.zip`，解压到 `E:\Tools\go`。
-
-### 5.2 Go 编译报 `possible misuse of unsafe.Pointer`
-
-`go vet` 4 处 `unsafe.Pointer(uintptr)` 警告（`handlers/selectdir_windows.go` 里 4 行 COM vtable 偏移读写）。`go build` 默认 vet 集合不含 `unsafeptr`，**不影响 `go build`**；只有 `go vet ./...` 与 `npm run type-check` 会报。不修。
-
-### 5.3 um-react 用 pnpm 11 装但 shim 写死旧路径
-
-项目里残留的 `Web\um-react\node_modules` 是从 `D:\BCTools\...` 拷来的（`.bin\tsc.CMD` 里的 `NODE_PATH=...D:\BCTools\...` 露馅）。同时 pnpm 11 已不再读 `package.json#pnpm.overrides`，配合上 `packageManager: pnpm@10.15.1` 等于同时坏两处。
-
-- **修**：
-  1. `npm i -g pnpm@10.15.1` 装回 10.15.1
-  2. `Remove-Item Web\um-react\node_modules -Recurse -Force` + `pnpm install` 干净重装
-  3. 之后 `.bin\tsc.CMD` 里 `NODE_PATH` 自动改回 `E:\BCTools3\...`
-
-### 5.4 `vite-plugin-top-level-await` 与 `@swc/core@1.16.1` 不兼容
-
-um-react 用 `vite-plugin-top-level-await@1.6.0` 把 TLA 包成 `Promise.all([...]).then(...)`，内部走 `@swc/core` 的 `parseSync` / `printSync`。SWC 1.16 引入更严格的 `Module` 节点检查，插件的 `transformModule` 产出的 AST 节点会被报 `missing field 'type'`。
-
-- **修**：在 `Web/um-react/package.json#pnpm.overrides` 加 `"@swc/core": "1.10.7"`，重装后 `node_modules\.pnpm\@swc+core@1.10.7\` 命中。
-
-### 5.5 `vite-plugin-top-level-await` 与 esbuild 0.28（Vite 7 自带）不兼容
-
-锁住 `@swc/core` 后又报错 `Transforming destructuring to the configured target environment ("chrome87", "edge88", "es2020", "firefox78", "safari14") is not supported yet`。原因：插件在 `generateBundle` 后用 vite 自带的 esbuild 把代码从 esnext 降回 `build.target`，esbuild 0.28 砍掉了 chrome87 等老目标。
-
-- **修**：`Web/um-react/vite.config.ts` 的 `build` 加 `target: 'es2022'`。插件会把它存下来当后处理目标，0.28 仍兼容。
-
-### 5.6 `simple-git-hooks prepare` 报 `'git' is not recognized`
-
-`Web/um-react` 的 `prepare` 跑 `simple-git-hooks`，里头要 git；`pnpm install` 装完会跑一次。
-
-- **修**：装 MinGit 2.50.1（轻量、~47 MB）到 `E:\Tools\mingit\cmd\` 并入 PATH。
-
-### 5.7 MinGW 7z 解压
-
-PowerShell 5.1 没 7z，且 `py7zr` 装不上（py7zr 依赖的 `inflate64` / `pyppmd` 旧版被国内镜像砍了）。
-
-- **修**：直接下 `https://www.7-zip.org/a/7zr.exe`（~600 KB 单文件）当 7z 解压器。
-
-## 6. 验证产物
+安装 Microsoft Edge WebView2 Runtime，或直接使用无参数的浏览器模式：
 
 ```powershell
-Get-ChildItem E:\BCTools3\dist
-# Name                Length
-# BCTools-Setup.exe   58536187   (57 MB 安装程序)
-# bctools.exe         45730304   (45 MB 主程序，含 ffmpeg+ffprobe+前端+um-react)
-
-# 主程序能起来（PowerShell 主机没 V2 DPI，会走 fallback；正常 Win10/11 桌面无此提示）
-& E:\BCTools3\dist\bctools.exe --help
-# Usage of E:\BCTools3\dist\bctools.exe:
-#   -dev      开发模式：替换已有后端
+.\bctools.exe
 ```
 
-## 7. 后续维护
+### 1743 端口被占用
 
-- `um-react` 升级时若 vue-tsc 报错，先看 `Web\um-react\.bin\tsc.CMD` 的 `NODE_PATH` 是不是还指向本机 `E:\BCTools3\...`，是的话直接清 `node_modules` 重装。
-- 装新版 Vite（>= 8）时如果 esbuild 跨过 0.29 砍更多目标，再调 `Web/um-react/vite.config.ts#build.target` 即可。
-- Go 升 1.26+ 时同步更新 `go.mod` 第一行 `go 1.x.0`。
+浏览器模式需要监听 `1743`。先尝试正常交接或关闭现有实例：
+
+```powershell
+.\bctools.exe --shutdown
+```
+
+桌面模式在端口不可用时仍可打开本机窗口，但 LAN 访问不可用。排查占用进程前，不要直接结束正在写数据的其他 BCTools 实例。
+
+### 测试提示缺少 Go 嵌入文件
+
+根目录的 `test` 和 `type-check` 会自动准备 Go embed 占位文件。单独运行 Go 工具前，可先执行：
+
+```powershell
+node scripts/prepare-go-embed-stubs.cjs
+go -C GoServer test ./...
+```
+
+占位文件只用于测试和检查，不是可发布的前端产物。
+
+## FFmpeg 源码包
+
+日常应用构建只复制已有 FFmpeg 产物。需要重编译时，在 MSYS2 UCRT64 中运行：
+
+```bash
+cd GoServer/ffmpeg_bctools_mini
+bash build.sh
+```
+
+发布工作流设置 `BCTOOLS_PACKAGE_FFMPEG_SOURCE=1`，同时生成 `FFmpeg-Sources.tar.gz`。分发二进制时应一并保留对应源码包和许可证。
+
+## 提交前检查
+
+```powershell
+npm run type-check
+npm run test
+npm run lint
+corepack pnpm@10.15.1 --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
+corepack pnpm@10.15.1 --dir Web/um-react test
+```
+
+修改 API 契约时再运行 `npm run generate:api`，并提交两个生成类型文件。构建产物、依赖目录、运行数据和本地密钥不进入 Git。
