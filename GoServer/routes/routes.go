@@ -29,6 +29,11 @@ func RegisterRoutes(r chi.Router, hs HandlerSet) {
 		api.Route("/v1", func(v1 chi.Router) {
 			registerAPI(v1, hs)
 			v1.Get("/openapi.json", contracts.Serve)
+			local := securelocal.RequireLoopbackHost
+			v1.Get("/decrypt/kugou/status", local(hs.Decrypt.HandleKugouStatus))
+			v1.Post("/decrypt/kugou/source", local(hs.Decrypt.HandleKugouSelect))
+			v1.Delete("/decrypt/kugou/source", local(hs.Decrypt.HandleKugouReset))
+			v1.Post("/decrypt/kugou/key", local(hs.Decrypt.HandleKugouKey))
 			if hs.Extensions != nil {
 				registerExtensions(v1, hs.Extensions)
 			}

@@ -42,16 +42,21 @@ func TestSnapshotLifecycle(t *testing.T) {
 }
 
 func TestPreImportSnapshot(t *testing.T) {
-	s, r, _ := newTestSnapshotStore(t)
-	r.Write(func(data *repo.Data) error {
+	s, r, dir := newTestSnapshotStore(t)
+	if err := r.Write(func(data *repo.Data) error {
 		data.DormSongs = append(data.DormSongs, models.Song{ID: 1, Date: "2026-07-25", Title: "A"})
+		if err := s.CreatePreImportSnapshot(data); err != nil {
+			return err
+		}
+		if err := s.CreatePreImportSnapshot(data); err != nil {
+			return err
+		}
 		return nil
-	})
-	filename, err := s.CreatePreImportSnapshot()
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("CreatePreImportSnapshot: %v", err)
 	}
-	if filename == "" {
-		t.Fatalf("expected filename")
+	files, err := filepath.Glob(filepath.Join(dir, "snapshots", "snapshot-pre-import-*.json"))
+	if err != nil || len(files) != 2 {
+		t.Fatalf("expected two distinct backups, got %v (%v)", files, err)
 	}
 }

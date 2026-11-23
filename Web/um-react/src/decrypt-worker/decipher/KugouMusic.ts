@@ -12,9 +12,13 @@ export class KugouMusicDecipher implements DecipherInstance {
 
     try {
       kgmHdr = new KuGouHeader(buffer.subarray(0, 0x400));
+      const offset = kgmHdr.offsetToData;
+      if (offset <= 0 || offset >= buffer.byteLength) {
+        throw new Error('Invalid Kugou audio offset');
+      }
       kgm = KuGou.fromHeaderV5(kgmHdr, options.kugouKey);
 
-      const audioBuffer = new Uint8Array(buffer.subarray(0x400));
+      const audioBuffer = new Uint8Array(buffer.subarray(offset));
       for (const [block, offset] of chunkBuffer(audioBuffer)) {
         kgm.decrypt(block, offset);
       }

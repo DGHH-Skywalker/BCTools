@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -91,19 +92,20 @@ func (s *ImportService) ImportXlsx(tempFile, songType string) (*models.ImportRes
 		valid = append(valid, vr{date, title, remark})
 	}
 
-	s.Snapshots.CreatePreImportSnapshot()
 	now := time.Now().UTC()
-	var ns []models.Song
+	ns := make([]models.Song, 0, len(valid))
 	for _, v := range valid {
 		ns = append(ns, models.Song{
-			ID:        s.Songs.GetNextID(),
 			Date:      v.date,
 			Title:     v.title,
 			Remark:    v.remark,
 			CreatedAt: now,
 		})
 	}
-	if err := s.Songs.ReplaceSongsByType(songType, ns); err != nil {
+	if err := s.Songs.ReplaceSongsByType(songType, ns, s.Snapshots.CreatePreImportSnapshot); err != nil {
+		if errors.Is(err, snapshotstore.ErrPreImportSnapshot) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("导入写入失败")
 	}
 	s.Snapshots.EnsureDailySnapshot()

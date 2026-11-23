@@ -28,19 +28,21 @@ import (
 // 看不到窗口。深挖发现是两个独立问题叠加：
 //
 // (1) vtable 偏移错误
-//     IUnknown → IModalWindow → IFileDialog → IFileOpenDialog 的继承链中，
-//     IModalWindow 只增加 Show（offset 3），IFileDialog 从 offset 4 开始。
-//     旧代码一度把 IModalWindow 误当成继承自 IOleWindow，导致 Show、SetOptions、
-//     SetTitle、GetResult 全部调错方法——例如 Show 调到 GetWindow，SetOptions
-//     调到 SetFolder，对话框实际上没有被创建，所以「窗口没显示」。
+//
+//	IUnknown → IModalWindow → IFileDialog → IFileOpenDialog 的继承链中，
+//	IModalWindow 只增加 Show（offset 3），IFileDialog 从 offset 4 开始。
+//	旧代码一度把 IModalWindow 误当成继承自 IOleWindow，导致 Show、SetOptions、
+//	SetTitle、GetResult 全部调错方法——例如 Show 调到 GetWindow，SetOptions
+//	调到 SetFolder，对话框实际上没有被创建，所以「窗口没显示」。
 //
 // (2) Win10 Foreground Window Restriction
-//     即使路径对了，浏览器抢焦点时 bctools.exe 是后台进程，Win10 起新模态
-//     窗口拿不到前台；用 GetForegroundWindow 拿到的几乎总是浏览器 HWND（跨
-//     进程），UIPI 还会二次拦截。
-//     解决：NULL owner（独立 top-level，不再被 UIPI 卡）+ AllowSetForegroundWindow
-//     + Show 之后 QueryInterface 出 IOleWindow 拿 HWND，强制 HWND_TOPMOST 抢一次
-//     焦点，再降回 NOTOPMOST 避免一直压顶。
+//
+//	即使路径对了，浏览器抢焦点时 bctools.exe 是后台进程，Win10 起新模态
+//	窗口拿不到前台；用 GetForegroundWindow 拿到的几乎总是浏览器 HWND（跨
+//	进程），UIPI 还会二次拦截。
+//	解决：NULL owner（独立 top-level，不再被 UIPI 卡）+ AllowSetForegroundWindow
+//	+ Show 之后 QueryInterface 出 IOleWindow 拿 HWND，强制 HWND_TOPMOST 抢一次
+//	焦点，再降回 NOTOPMOST 避免一直压顶。
 var (
 	modole32          = windows.NewLazySystemDLL("ole32.dll")
 	procCoInit        = modole32.NewProc("CoInitializeEx")
@@ -48,14 +50,14 @@ var (
 	procCoCreate      = modole32.NewProc("CoCreateInstance")
 	procCoTaskMemFree = modole32.NewProc("CoTaskMemFree")
 
-	moduser32 = windows.NewLazySystemDLL("user32.dll")
+	moduser32                    = windows.NewLazySystemDLL("user32.dll")
 	procAllowSetForegroundWindow = moduser32.NewProc("AllowSetForegroundWindow")
 	procSetForegroundWindow      = moduser32.NewProc("SetForegroundWindow")
 	procSetWindowPos             = moduser32.NewProc("SetWindowPos")
 	procGetSystemMetrics         = moduser32.NewProc("GetSystemMetrics")
 	procGetWindowRect            = moduser32.NewProc("GetWindowRect")
 
-	modkernel32           = windows.NewLazySystemDLL("kernel32.dll")
+	modkernel32             = windows.NewLazySystemDLL("kernel32.dll")
 	procGetCurrentProcessId = modkernel32.NewProc("GetCurrentProcessId")
 )
 
@@ -105,13 +107,14 @@ const (
 )
 
 // SetWindowPos 第二个参数 hWndInsertAfter 的特殊值（winuser.h）。
-//   HWND_TOP        = 0
-//   HWND_BOTTOM     = 1
-//   HWND_TOPMOST    = -1
-//   HWND_NOTOPMOST  = -2
+//
+//	HWND_TOP        = 0
+//	HWND_BOTTOM     = 1
+//	HWND_TOPMOST    = -1
+//	HWND_NOTOPMOST  = -2
 const (
-	HWND_TOPMOST   = ^uintptr(0)         // -1
-	HWND_NOTOPMOST = ^uintptr(0) - 1     // -2
+	HWND_TOPMOST   = ^uintptr(0)     // -1
+	HWND_NOTOPMOST = ^uintptr(0) - 1 // -2
 )
 
 // GetSystemMetrics 索引（winuser.h）。
@@ -123,18 +126,18 @@ const (
 // IFileOpenDialog vtable 偏移（按 IUnknown → IModalWindow → IFileDialog →
 // IFileOpenDialog 继承顺序累加；COM 规范保证 vtable 与声明顺序一致）：
 //
-//   IUnknown:        0=QueryInterface, 1=AddRef, 2=Release
-//   IModalWindow:    3=Show
-//   IFileDialog:     4=SetFileTypes,   5=SetFileTypeIndex,  6=GetFileTypeIndex,
-//                    7=Advise,         8=Unadvise,          9=SetOptions,
-//                    10=GetOptions,    11=SetDefaultFolder, 12=SetFolder,
-//                    13=GetFolder,     14=GetCurrentSelection,
-//                    15=SetFileName,   16=GetFileName,      17=SetTitle,
-//                    18=SetOkButtonLabel, 19=SetFileNameLabel,
-//                    20=GetResult,     21=AddPlace,         22=SetDefaultExtension,
-//                    23=Close,         24=SetClientGuid,    25=ClearClientData,
-//                    26=SetFilter
-//   IFileOpenDialog: 27=GetResults,    28=GetSelectedItems
+//	IUnknown:        0=QueryInterface, 1=AddRef, 2=Release
+//	IModalWindow:    3=Show
+//	IFileDialog:     4=SetFileTypes,   5=SetFileTypeIndex,  6=GetFileTypeIndex,
+//	                 7=Advise,         8=Unadvise,          9=SetOptions,
+//	                 10=GetOptions,    11=SetDefaultFolder, 12=SetFolder,
+//	                 13=GetFolder,     14=GetCurrentSelection,
+//	                 15=SetFileName,   16=GetFileName,      17=SetTitle,
+//	                 18=SetOkButtonLabel, 19=SetFileNameLabel,
+//	                 20=GetResult,     21=AddPlace,         22=SetDefaultExtension,
+//	                 23=Close,         24=SetClientGuid,    25=ClearClientData,
+//	                 26=SetFilter
+//	IFileOpenDialog: 27=GetResults,    28=GetSelectedItems
 //
 // 5.6.1 修正：上一版误把 IModalWindow 当成继承自 IOleWindow，导致所有 IFileDialog
 // 方法偏移整体多算 2，Show 实际上调到了 GetWindow、SetOptions 调到了 SetFolder，
@@ -162,10 +165,18 @@ const (
 //
 // 5.6.1：把整个 COM 流程丢到独立 OS 线程跑（goroutine + LockOSThread），
 // 主 HTTP handler 通过 channel 等结果：
-//   1) CoInit / Show / IOleWindow::GetWindow 严格同线程，COM STA 单元稳定；
-//   2) 不阻塞 HTTP worker，长任务不会拖死 server；
-//   3) 加 120s 兜底超时，Show 内部卡死不会永久占住 OS 线程。
+//  1. CoInit / Show / IOleWindow::GetWindow 严格同线程，COM STA 单元稳定；
+//  2. 不阻塞 HTTP worker，长任务不会拖死 server；
+//  3. 加 120s 兜底超时，Show 内部卡死不会永久占住 OS 线程。
 func selectDirectory(title string) (string, error) {
+	return selectPath(title, true)
+}
+
+func selectKugouDatabase() (string, error) {
+	return selectPath("选择酷狗音乐数据库", false)
+}
+
+func selectPath(title string, folders bool) (string, error) {
 	type result struct {
 		path string
 		err  error
@@ -175,7 +186,7 @@ func selectDirectory(title string) (string, error) {
 	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
-		path, err := selectDirectoryImpl(title)
+		path, err := selectPathImpl(title, folders)
 		resultCh <- result{path, err}
 	}()
 
@@ -183,12 +194,12 @@ func selectDirectory(title string) (string, error) {
 	case r := <-resultCh:
 		return r.path, r.err
 	case <-time.After(120 * time.Second):
-		return "", fmt.Errorf("selectDirectory timeout after 120s")
+		return "", fmt.Errorf("file dialog timeout after 120s")
 	}
 }
 
-// selectDirectoryImpl runs on a dedicated OS thread.
-func selectDirectoryImpl(title string) (string, error) {
+// selectPathImpl runs on a dedicated OS thread.
+func selectPathImpl(title string, folders bool) (string, error) {
 	// COM apartment：第二个参数 2 = COINIT_APARTMENTTHREADED；
 	// 返回 1 (S_FALSE) 表示该线程 COM 已初始化过，可忽略。
 	hr, _, _ := procCoInit.Call(0, 2)
@@ -220,8 +231,23 @@ func selectDirectoryImpl(title string) (string, error) {
 	}
 	defer releaseIUnknown(pUnk)
 
-	// SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)
-	if hr := callVtbl(pUnk, vtblSetOptions, 0, uintptr(FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM)); hr != S_OK {
+	options := uintptr(FOS_FORCEFILESYSTEM)
+	if folders {
+		options |= FOS_PICKFOLDERS
+	} else {
+		const fileMustExist = 0x1000
+		options |= fileMustExist
+		name, _ := windows.UTF16PtrFromString("酷狗音乐数据库 (*.db)")
+		pattern, _ := windows.UTF16PtrFromString("*.db")
+		filter := struct{ name, pattern *uint16 }{name, pattern}
+		const setFileTypes = 4
+		hr := callVtbl(pUnk, setFileTypes, 0, 1, uintptr(unsafe.Pointer(&filter)))
+		runtime.KeepAlive(filter)
+		if hr != S_OK {
+			return "", fmt.Errorf("SetFileTypes failed: 0x%x", hr)
+		}
+	}
+	if hr := callVtbl(pUnk, vtblSetOptions, 0, options); hr != S_OK {
 		return "", fmt.Errorf("SetOptions failed: 0x%x", hr)
 	}
 

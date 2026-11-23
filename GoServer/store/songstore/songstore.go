@@ -239,17 +239,6 @@ func (s *SongStore) AddSong(req models.CreateSongRequest) (models.Song, error) {
 	err := s.repo.Write(func(data *repo.Data) error {
 		// 同一宿舍时段允许放置多首歌曲，不再做冲突校验。
 
-		maxID := max(0, data.NextSongID-1)
-		for _, song := range data.DormSongs {
-			if song.ID > maxID {
-				maxID = song.ID
-			}
-		}
-		for _, song := range data.BroadcastSongs {
-			if song.ID > maxID {
-				maxID = song.ID
-			}
-		}
 		now := time.Now().UTC()
 		period := ""
 		if req.Period != nil {
@@ -277,7 +266,7 @@ func (s *SongStore) AddSong(req models.CreateSongRequest) (models.Song, error) {
 			order = maxOrder + 1
 		}
 		song := models.Song{
-			ID:         maxID + 1,
+			ID:         nextSongID(data),
 			Date:       req.Date,
 			Title:      req.Title,
 			Artist:     req.Artist,
@@ -371,20 +360,29 @@ func (s *SongStore) DeleteSong(id int64) error {
 	})
 }
 
-// ReplaceSongsByType replaces all songs of a given type (for full import).
-func (s *SongStore) ReplaceSongsByType(songType string, songs []models.Song) error {
-	if songs == nil {
-		songs = []models.Song{}
-	}
+// ReplaceSongsByType backs up the current state, assigns fresh IDs and replaces
+// the selected playlist within a single repository write.
+func (s *SongStore) ReplaceSongsByType(songType string, songs []models.Song, saveSnapshot func(*repo.Data) error) error {
 	return s.repo.Write(func(data *repo.Data) error {
+		var target *[]models.Song
 		switch songType {
 		case "dorm":
-			data.DormSongs = songs
+			target = &data.DormSongs
 		case "broadcast":
-			data.BroadcastSongs = songs
+			target = &data.BroadcastSongs
 		default:
 			return store.ErrValidation
 		}
+		if err := saveSnapshot(data); err != nil {
+			return err
+		}
+		firstID := nextSongID(data)
+		replacement := make([]models.Song, len(songs))
+		for i, song := range songs {
+			song.ID = firstID + int64(i)
+			replacement[i] = song
+		}
+		*target = replacement
 		return nil
 	})
 }
@@ -429,22 +427,13 @@ func (s *SongStore) GetSongsAssignedToTimeSlotIDs(ids map[string]bool) []models.
 	return affected
 }
 
-// GetNextID returns the next available song ID.
-func (s *SongStore) GetNextID() int64 {
-	var maxID int64
-	s.repo.Read(func(data *repo.Data) {
-		maxID = max(0, data.NextSongID-1)
-		for _, song := range data.DormSongs {
-			if song.ID > maxID {
-				maxID = song.ID
-			}
+func nextSongID(data *repo.Data) int64 {
+	maxID := max(0, data.NextSongID-1)
+	for _, songs := range [][]models.Song{data.DormSongs, data.BroadcastSongs} {
+		for _, song := range songs {
+			maxID = max(maxID, song.ID)
 		}
-		for _, song := range data.BroadcastSongs {
-			if song.ID > maxID {
-				maxID = song.ID
-			}
-		}
-	})
+	}
 	return maxID + 1
 }
 

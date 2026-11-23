@@ -11,10 +11,8 @@ import (
 	"go.uber.org/zap"
 	"unlock-music.dev/cli/algo/common"
 
-	_ "unlock-music.dev/cli/algo/kgm"
 	_ "unlock-music.dev/cli/algo/kwm"
 	_ "unlock-music.dev/cli/algo/ncm"
-	_ "unlock-music.dev/cli/algo/qmc"
 	_ "unlock-music.dev/cli/algo/tm"
 	_ "unlock-music.dev/cli/algo/xiami"
 	_ "unlock-music.dev/cli/algo/ximalaya"
@@ -28,7 +26,7 @@ type DecryptedMeta struct {
 }
 
 var supportedEncryptedExts = map[string]bool{
-	".ncm": true, ".kgm": true, ".vpr": true, ".kgma": true,
+	".ncm": true, ".kgg": true, ".kgm": true, ".vpr": true, ".kgma": true, ".kgm.flac": true, ".vpr.flac": true,
 	".qmc0": true, ".qmc3": true, ".qmcogg": true, ".qmcflac": true,
 	".kwm": true, ".xm": true, ".tm": true, ".ximalaya": true,
 }
@@ -36,6 +34,20 @@ var supportedEncryptedExts = map[string]bool{
 // IsEncryptedFormat checks if the file extension is a known encrypted format
 func IsEncryptedFormat(ext string) bool {
 	return supportedEncryptedExts[strings.ToLower(ext)]
+}
+
+// EncryptedExtension also preserves KuGou's compound Android suffixes.
+func EncryptedExtension(filename string) string {
+	name := strings.ToLower(filename)
+	for _, suffix := range []string{".kgm.flac", ".vpr.flac"} {
+		if strings.HasSuffix(name, suffix) {
+			return suffix
+		}
+	}
+	if ext := filepath.Ext(name); IsEncryptedFormat(ext) {
+		return ext
+	}
+	return ""
 }
 
 // Decrypt decrypts an encrypted audio file and returns the raw audio data + metadata.
@@ -47,22 +59,9 @@ func Decrypt(ctx context.Context, src io.ReadSeeker, filename string, logger *za
 	_ []byte,
 	err error,
 ) {
-	ext := filepath.Ext(filename)
-	factories := common.GetDecoder(ext, false)
-	if len(factories) == 0 {
-		return nil, nil, nil, fmt.Errorf("unsupported format: %s", ext)
-	}
-
-	params := &common.DecoderParams{
-		Reader:    src,
-		Extension: ext,
-		FilePath:  filename,
-		Logger:    logger,
-	}
-
-	decoder := factories[0].Create(params)
-	if err := decoder.Validate(); err != nil {
-		return nil, nil, nil, fmt.Errorf("validate: %w", err)
+	decoder, err := validatedDecoder(src, filename, logger, nil)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	audioData, err = io.ReadAll(decoder)
@@ -82,22 +81,17 @@ func DecryptToFile(ctx context.Context, src io.ReadSeeker, filename, outputPath 
 	_ []byte,
 	err error,
 ) {
-	ext := filepath.Ext(filename)
-	factories := common.GetDecoder(ext, false)
-	if len(factories) == 0 {
-		return nil, nil, fmt.Errorf("unsupported format: %s", ext)
-	}
+	return decryptToFile(ctx, src, filename, outputPath, logger, nil)
+}
 
-	params := &common.DecoderParams{
-		Reader:    src,
-		Extension: ext,
-		FilePath:  filename,
-		Logger:    logger,
-	}
-
-	decoder := factories[0].Create(params)
-	if err := decoder.Validate(); err != nil {
-		return nil, nil, fmt.Errorf("validate: %w", err)
+func decryptToFile(_ context.Context, src io.ReadSeeker, filename, outputPath string, logger *zap.Logger, kugouKey func(string) string) (
+	meta *DecryptedMeta,
+	_ []byte,
+	err error,
+) {
+	decoder, err := validatedDecoder(src, filename, logger, kugouKey)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	out, err := os.Create(outputPath)
@@ -119,6 +113,37 @@ func DecryptToFile(ctx context.Context, src io.ReadSeeker, filename, outputPath 
 	}
 
 	return meta, nil, nil
+}
+
+func validatedDecoder(src io.ReadSeeker, filename string, logger *zap.Logger, kugouKey func(string) string) (common.Decoder, error) {
+	ext := EncryptedExtension(filename)
+	factories := common.GetDecoder(filename, ext != "")
+	if len(factories) == 0 {
+		return nil, fmt.Errorf("unsupported format: %s", filename)
+	}
+	factory := factories[0]
+	for _, candidate := range factories {
+		if candidate.Suffix == ext {
+			factory = candidate
+			break
+		}
+	}
+	var decoder common.Decoder
+	switch factory.Suffix {
+	case ".kgg", ".kgm", ".kgma", ".vpr", ".kgm.flac", ".vpr.flac":
+		var err error
+		decoder, err = kugouV5(src, kugouKey)
+		if err != nil {
+			return nil, fmt.Errorf("validate: %w", err)
+		}
+	}
+	if decoder == nil {
+		decoder = factory.Create(&common.DecoderParams{Reader: src, Extension: factory.Suffix, FilePath: filename, Logger: logger})
+	}
+	if err := decoder.Validate(); err != nil {
+		return nil, fmt.Errorf("validate: %w", err)
+	}
+	return decoder, nil
 }
 
 func extractMeta(decoder common.Decoder) *DecryptedMeta {

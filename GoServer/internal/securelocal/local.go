@@ -1,13 +1,30 @@
 package securelocal
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"broadcast-tool/internal/requestscope"
+	"broadcast-tool/network"
 	"broadcast-tool/response"
 )
+
+// RequireLoopbackHost also rejects DNS rebinding for private local data.
+func RequireLoopbackHost(next http.HandlerFunc) http.HandlerFunc {
+	return Require(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			host = strings.Trim(r.Host, "[]")
+		}
+		if !requestscope.Desktop(r) && !network.IsLocalhost(strings.ToLower(host)) {
+			response.WriteError(w, http.StatusForbidden, "LOCAL_REQUIRED", "请使用本机 BCTools 地址")
+			return
+		}
+		next(w, r)
+	})
+}
 
 // Require protects new administrative endpoints in the browser and desktop.
 func Require(next http.HandlerFunc) http.HandlerFunc {

@@ -14,8 +14,7 @@ import (
 
 // ProcessFile converts the input audio to MP3. Encrypted formats are decrypted first.
 func (c *FFMpegConverter) ProcessFile(inputPath, outputPath string) (ProbeResult, error) {
-	ext := filepath.Ext(inputPath)
-	if IsEncryptedFormat(ext) {
+	if EncryptedExtension(inputPath) != "" {
 		return c.processEncrypted(inputPath, outputPath)
 	}
 	result, err := c.Probe(inputPath)
@@ -31,8 +30,7 @@ func (c *FFMpegConverter) ProcessFile(inputPath, outputPath string) (ProbeResult
 // StashFile extracts metadata without re-encoding. MP3 is stored as-is at outputPath.
 // Encrypted files are decrypted and converted to MP3 at outputPath.
 func (c *FFMpegConverter) StashFile(inputPath, outputPath string) (ProbeResult, error) {
-	ext := filepath.Ext(inputPath)
-	if IsEncryptedFormat(ext) {
+	if EncryptedExtension(inputPath) != "" {
 		return c.processEncrypted(inputPath, outputPath)
 	}
 	result, err := c.Probe(inputPath)
@@ -79,7 +77,7 @@ func (c *FFMpegConverter) processEncrypted(inputPath, outputPath string) (ProbeR
 				decryptDone <- decryptResult{err: fmt.Errorf("decrypt panic: %v", r)}
 			}
 		}()
-		m, _, e := DecryptToFile(ctx, f, filepath.Base(inputPath), tmpPath, logger)
+		m, _, e := decryptToFile(ctx, f, filepath.Base(inputPath), tmpPath, logger, c.KugouKey)
 		decryptDone <- decryptResult{m, e}
 	}()
 

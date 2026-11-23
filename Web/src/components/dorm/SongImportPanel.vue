@@ -5,8 +5,8 @@
 
     <ImportUploadZone
       :title="t('songImport.uploadTitle')"
-      accept=".ncm,.mp3,.mp4,.m4a,.flac,.wav,.aac,.ogg,.wma,.ape"
-      formats="支持 ncm / mp3 / m4a / flac / wav / aac / ogg / wma / ape / mp4"
+      accept=".ncm,.kgg,.kgm,.kgma,.vpr,.mp3,.mp4,.m4a,.flac,.wav,.aac,.ogg,.wma,.ape"
+      formats="支持 MP3、FLAC 等音频及 NCM、KGG、KGM、KGMA、VPR 加密文件"
       @change="handleFiles"
     />
 
@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue"
+import { ref, computed, onMounted, watch } from "vue"
 import { useI18n } from "../../i18n"
 import { useSongsStore } from "../../stores/songs"
 import { useSettingsStore } from "../../stores/settings"
@@ -54,8 +54,8 @@ const { t } = useI18n()
 const songsStore = useSongsStore()
 const settingsStore = useSettingsStore()
 const error = ref("")
-const selectedDate = ref(props.date)
-const defaultTimeSlotId = ref<string | null>(props.defaultSlotId || null)
+const selectedDate = computed(() => props.date)
+const defaultTimeSlotId = computed(() => props.defaultSlotId)
 
 const {
   processingFiles,
@@ -97,6 +97,7 @@ function renderSlotLabel(option: SelectOption) {
   return option.label as string
 }
 
+const ready = ref(false)
 onMounted(async () => {
   try {
     await Promise.all([songsStore.fetchSongs("dorm"), settingsStore.fetchSettings()])
@@ -104,9 +105,11 @@ onMounted(async () => {
     error.value = "加载数据失败"
   }
   clearFiles()
-  if (props.stageId) {
-    await importFromStage(props.stageId)
-  }
+  ready.value = true
+})
+
+watch([ready, () => props.stageId], ([loaded, stageId]) => {
+  if (loaded && stageId) void importFromStage(stageId)
 })
 
 // 从后端暂存区导入 um-react 解密后的音频。

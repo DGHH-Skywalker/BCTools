@@ -226,10 +226,14 @@ func (l *MusicLibrary) musicFilesDir() string {
 // AbsSongPath 把 Song.FilePath（"2026年第34周/05.mp3" 或暂存区裸文件名）
 // 解析为绝对路径。调用方需自行确认文件存在。
 func (l *MusicLibrary) AbsSongPath(rel string) string {
-	if strings.ContainsAny(rel, `/\`) {
-		return filepath.Join(l.musicFilesDir(), filepath.FromSlash(rel))
+	name := filepath.FromSlash(strings.ReplaceAll(rel, "\\", "/"))
+	if !filepath.IsLocal(name) {
+		return ""
 	}
-	return filepath.Join(paths.GetSongStagingDir(l.DataRoot), rel)
+	if strings.ContainsRune(name, filepath.Separator) {
+		return filepath.Join(l.musicFilesDir(), name)
+	}
+	return filepath.Join(paths.GetSongStagingDir(l.DataRoot), name)
 }
 
 // ---------------------------------------------------------------------------
@@ -281,6 +285,9 @@ func (l *MusicLibrary) locateSongAudio(id int64) (string, *models.MergedPart, er
 	}
 
 	abs := l.AbsSongPath(song.FilePath)
+	if abs == "" || paths.IsKugouDataPath(l.DataRoot, abs) {
+		return "", nil, fmt.Errorf("invalid audio path for song %d", id)
+	}
 	if !strings.ContainsAny(song.FilePath, `/\`) {
 		// 暂存区：独立文件
 		if _, statErr := os.Stat(abs); statErr != nil {

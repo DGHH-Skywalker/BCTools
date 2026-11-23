@@ -19,6 +19,7 @@ import {
   selectQMCv2KeyByFileName,
   selectQtfmAndroidKey,
 } from '../settings/settingsSelector';
+import { findAutomaticKugouKey } from '../settings/kugouDatabase';
 import { cleanFilename } from '~/util/cleanFilename';
 
 export enum ProcessState {
@@ -93,11 +94,15 @@ export const processFile = createAsyncThunk<
     ),
   ]);
 
+  const manualKugouKey = selectKugouKey(thunkAPI.getState() as RootState, kugouHdr);
+  const kugouKey =
+    manualKugouKey ??
+    (kugouHdr?.version === 5 && kugouHdr.audioHash ? await findAutomaticKugouKey(kugouHdr.audioHash) : undefined);
   const options: DecryptCommandOptions = {
     fileName: file.fileName,
     qmc2Key: selectQMCv2KeyByFileName(state, qmcv2MusicExMediaFile || file.fileName),
     kwm2key: selectKWMv2Key(state, kuwoHdr),
-    kugouKey: selectKugouKey(state, kugouHdr),
+    kugouKey,
     qingTingAndroidKey: selectQtfmAndroidKey(state),
   };
   return decryptionQueue.add({ id: fileId, blobURI: file.raw, options }, onPreProcess);

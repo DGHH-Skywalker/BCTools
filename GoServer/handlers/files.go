@@ -38,7 +38,7 @@ func NewFileHandler(appDataDir string, c *converter.FFMpegConverter, library *se
 		c,
 		h.validateSourcePath,
 		validateTargetName,
-		validateOrganizeTargetDir,
+		h.validateOrganizeTargetDir,
 	)
 	return h
 }
@@ -66,9 +66,8 @@ func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "创建歌曲暂存目录失败")
 		return
 	}
-	ext := strings.ToLower(filepath.Ext(header.Filename))
 	inputExt := ".tmp"
-	if converter.IsEncryptedFormat(ext) {
+	if ext := converter.EncryptedExtension(header.Filename); ext != "" {
 		inputExt = ext
 	}
 	inputPath := filepath.Join(tempDir, id+inputExt)
@@ -88,8 +87,7 @@ func (h *FileHandler) HandleProcess(w http.ResponseWriter, r *http.Request) {
 	result, err := h.Converter.ProcessFile(inputPath, outputPath)
 	if err != nil {
 		os.Remove(outputPath)
-		code := classifyConversionError(err)
-		response.WriteError(w, http.StatusInternalServerError, code, "音频转换失败")
+		writeConversionError(w, err, "音频转换失败")
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, models.FileProcessResponse{
@@ -120,9 +118,8 @@ func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 		response.WriteInternalError(w, "创建歌曲暂存目录失败")
 		return
 	}
-	ext := strings.ToLower(filepath.Ext(header.Filename))
 	inputExt := ".mp3"
-	if converter.IsEncryptedFormat(ext) {
+	if ext := converter.EncryptedExtension(header.Filename); ext != "" {
 		inputExt = ext
 	}
 	inputPath := filepath.Join(tempDir, id+inputExt)
@@ -142,7 +139,7 @@ func (h *FileHandler) HandleStash(w http.ResponseWriter, r *http.Request) {
 	result, err := h.Converter.StashFile(inputPath, outputPath)
 	if err != nil {
 		os.Remove(outputPath)
-		response.WriteError(w, http.StatusInternalServerError, classifyConversionError(err), "音频暂存失败")
+		writeConversionError(w, err, "音频暂存失败")
 		return
 	}
 	response.WriteJSON(w, http.StatusOK, models.FileProcessResponse{
@@ -205,6 +202,14 @@ func (h *FileHandler) HandleMerge(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "audio/mpeg")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
 	http.ServeFile(w, r, outPath)
+}
+
+func writeConversionError(w http.ResponseWriter, err error, message string) {
+	if errors.Is(err, converter.ErrKugouKeyMissing) {
+		response.WriteError(w, http.StatusUnprocessableEntity, "KUGOU_KEY_MISSING", "本机酷狗数据库没有这首歌的密钥，请在 BCTools 设置中选择包含该曲目的数据库后重试")
+		return
+	}
+	response.WriteError(w, http.StatusInternalServerError, classifyConversionError(err), message)
 }
 
 func classifyConversionError(err error) string {
@@ -302,6 +307,9 @@ func (h *FileHandler) validateSourcePath(src string) (string, error) {
 		return "", err
 	}
 	clean := filepath.Clean(abs)
+	if paths.IsKugouDataPath(appDataDir, clean) {
+		return "", errors.New("source not allowed")
+	}
 	if strings.Contains(clean, "..") {
 		return "", fmt.Errorf("path traversal")
 	}
@@ -327,7 +335,7 @@ func validateTargetName(name string) (string, error) {
 	return base, nil
 }
 
-func validateOrganizeTargetDir(dir string) (string, error) {
+func (h *FileHandler) validateOrganizeTargetDir(dir string) (string, error) {
 	if dir == "" {
 		return "", fmt.Errorf("targetDir 不能为空")
 	}
@@ -336,6 +344,9 @@ func validateOrganizeTargetDir(dir string) (string, error) {
 		return "", fmt.Errorf("无效路径")
 	}
 	clean := filepath.Clean(abs)
+	if paths.IsKugouDataPath(h.AppDataDir, clean) {
+		return "", errors.New("不可导出到酷狗数据库目录")
+	}
 	if strings.Contains(clean, "..") {
 		return "", fmt.Errorf("路径包含非法字符")
 	}
@@ -456,6 +467,10 @@ func (h *FileHandler) HandleBrowse(w http.ResponseWriter, r *http.Request) {
 	cleanDir, err := validateBrowsePath(dir)
 	if err != nil {
 		response.WriteValidationError(w, err.Error())
+		return
+	}
+	if paths.IsKugouDataPath(h.AppDataDir, cleanDir) {
+		response.WriteValidationError(w, "不可浏览酷狗数据库目录")
 		return
 	}
 	entries, err := os.ReadDir(cleanDir)

@@ -76,3 +76,23 @@ func TestNewAdministrativeRoutesRejectLAN(t *testing.T) {
 		}
 	}
 }
+
+func TestKugouKeysRejectNonlocalAndReboundOrigins(t *testing.T) {
+	router := chi.NewRouter()
+	RegisterRoutes(router, HandlerSet{})
+	for _, tt := range []struct{ remote, address, origin string }{
+		{"192.0.2.55:1234", "http://localhost:1743", "http://localhost:1743"},
+		{"127.0.0.1:1234", "http://localhost:1743", "https://unrelated.example"},
+		{"127.0.0.1:1234", "http://example.test:1743", "http://example.test:1743"},
+	} {
+		r := httptest.NewRequest(http.MethodPost, tt.address+"/api/v1/decrypt/kugou/key", strings.NewReader(`{"audioHash":"sample"}`))
+		r.RemoteAddr = tt.remote
+		r.Header.Set("X-BCTools-Local", "1")
+		r.Header.Set("Origin", tt.origin)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("key endpoint did not reject %s from %s: %d", tt.origin, tt.remote, w.Code)
+		}
+	}
+}

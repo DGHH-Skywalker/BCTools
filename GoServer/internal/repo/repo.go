@@ -95,6 +95,25 @@ func (r *Repository) SnapshotData() ([]byte, error) {
 	return json.MarshalIndent(r.data, "", "  ")
 }
 
+// SaveSnapshot persists supplied state without taking the repository lock.
+// This allows a write callback to back up its current state before mutating it.
+func (r *Repository) SaveSnapshot(filename string, data *Data) error {
+	encoded, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	dir := paths.GetSnapshotsDir(r.appDataDir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	return atomicFile(root, filename, encoded)
+}
+
 func (r *Repository) loadOrInit() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

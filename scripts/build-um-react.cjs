@@ -11,6 +11,7 @@
 const fs = require("fs")
 const path = require("path")
 const { spawnSync } = require("child_process")
+const { createHash } = require("node:crypto")
 
 const ROOT = path.resolve(__dirname, "..")
 const UM = path.join(ROOT, "Web", "um-react")
@@ -81,13 +82,15 @@ else { fs.writeFileSync(idxPath, patched, "utf8"); log("  已设置路由 base �
 
 // 注入桥接脚本
 if (fs.existsSync(BRIDGE_SRC)) {
-  fs.copyFileSync(BRIDGE_SRC, path.join(DIST, "um-react-bridge.js"))
+  // 嵌入资源长期缓存，桥接脚本内容改变时使用新地址。
+  const bridge = fs.readFileSync(BRIDGE_SRC)
+  const hash = createHash("sha256").update(bridge).digest("hex").slice(0, 16)
+  const file = `um-react-bridge-${hash}.js`
+  fs.writeFileSync(path.join(DIST, file), bridge)
   html = fs.readFileSync(idxPath, "utf8")
-  const tag = '<script src="./um-react-bridge.js"></script>'
-  if (!html.includes(tag)) {
-    const newHtml = html.replace("</head>", tag + "</head>")
-    fs.writeFileSync(idxPath, newHtml, "utf8")
-  }
+  const tag = `<script src="./${file}"></script>`
+  html = html.replace(/<script src="\.\/um-react-bridge(?:-[a-f0-9]+)?\.js"><\/script>/g, "")
+  fs.writeFileSync(idxPath, html.replace("</head>", tag + "</head>"), "utf8")
   log("  已注入 um-react 桥接脚本")
 }
 

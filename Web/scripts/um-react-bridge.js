@@ -6,11 +6,8 @@
  * the BCTools backend and opens the main app's song-import page IN A SEPARATE
  * TAB, leaving um-react open so the user can import more songs.
  *
- * Cross-page communication goes through the BACKEND, not window.opener/postMessage:
- * the um-react tab and the main app may run on different devices on the LAN (e.g.
- * a phone decrypting and a PC importing), and window.opener only works between
- * tabs on a single browser on one device. Routing the hand-off through the
- * backend makes it work everywhere, including mobile.
+ * The application backend owns the temporary upload and its import receipt.
+ * The import tab or desktop window opens with the stage ID in its URL.
  *
  * Import-success feedback: after the main app imports the staged file it POSTs
  * /api/decrypt/stage/{id}/imported. This script polls that flag; once it sees
@@ -33,7 +30,7 @@
   var POLL_INTERVAL = 300; // ms
   var POLL_MAX_ATTEMPTS = 1000; // ~5 min before giving up
 
-  // stageId -> { btn, fileName, timer, attempts }
+  // stageId -> { timer, attempts }
   var pending = {};
 
   function findDownloadAnchor(row) {
@@ -83,13 +80,19 @@
 
   function handleImport(downloadAnchor, btn) {
     var blobUrl = downloadAnchor.getAttribute("href");
-    // The download attribute carries the decrypted filename; we match on it later
-    // to find this exact card again and click its native 删除 button.
     var fileName = downloadAnchor.getAttribute("download") || "decrypted.mp3";
     if (!blobUrl) {
       alert("未找到解密后的音频，请稍后再试。");
       return;
     }
+    var desktop = location.hostname === "wails.localhost" || location.hostname.startsWith("wails.localhost.");
+    // Open under the click's user activation, before asynchronous upload.
+    var importTab = desktop ? null : window.open("", IMPORT_TAB_NAME);
+    if (!desktop && !importTab) {
+      alert("无法打开导入页面，请允许本站的弹出式窗口后重试。");
+      return;
+    }
+    var uploadedStage;
     setBusy(btn, "上传中…", true);
     fetch(blobUrl)
       .then(function (res) {
@@ -107,27 +110,30 @@
       })
       .then(function (data) {
         if (!data || !data.stageId) throw new Error("上传响应无效");
+        uploadedStage = data.stageId;
         // Open the main app's import page in its own tab; um-react stays open.
         // A named tab is reused for successive imports so no tab accumulates.
-        if (location.hostname === "wails.localhost" || location.hostname.startsWith("wails.localhost.")) {
+        if (desktop) {
           return fetch("/api/desktop/window?view=import&stage=" + encodeURIComponent(data.stageId), {
             method: "POST", headers: { "X-BCTools-Local": "1" }
           }).then(function (res) {
             if (!res.ok) throw new Error("无法打开导入页面");
             setBusy(btn, "等待导入…", true);
-            startPolling(data.stageId, btn, fileName);
+            startPolling(data.stageId, btn, blobUrl);
           });
         }
-        var opened = window.open(IMPORT_URL + encodeURIComponent(data.stageId), IMPORT_TAB_NAME);
-        if (!opened) {
-          alert("无法打开导入页面，请允许本站的弹出式窗口后重试。");
-          setBusy(btn, "导入", false);
-          return;
-        }
+        if (importTab.closed) throw new Error("导入页面已关闭");
+        importTab.location.href = new URL(IMPORT_URL + encodeURIComponent(data.stageId), location.origin).href;
         setBusy(btn, "等待导入…", true);
-        startPolling(data.stageId, btn, fileName);
+        startPolling(data.stageId, btn, blobUrl);
       })
       .catch(function (err) {
+        if (uploadedStage) {
+          fetch(STAGE_URL + "/" + encodeURIComponent(uploadedStage), { method: "DELETE" }).catch(function () {});
+        }
+        if (importTab && !importTab.closed) {
+          try { if (importTab.location.href === "about:blank") importTab.close(); } catch {}
+        }
         console.error("[bctools-bridge] import failed:", err);
         setBusy(btn, "导入", false);
         alert("导入失败：" + (err && err.message ? err.message : "未知错误"));
@@ -136,8 +142,8 @@
 
   // startPolling watches the staged file's meta until the main app marks it
   // imported, then removes the um-react card via its own delete logic.
-  function startPolling(stageId, btn, fileName) {
-    var entry = { btn: btn, fileName: fileName, attempts: 0, timer: null };
+  function startPolling(stageId, btn, blobUrl) {
+    var entry = { attempts: 0, timer: null };
     pending[stageId] = entry;
     entry.timer = setInterval(function () {
       entry.attempts++;
@@ -156,7 +162,7 @@
           if (!meta) return;
           if (meta.imported) {
             stopPolling(stageId);
-            removeCardByFileName(fileName);
+            removeCard(blobUrl);
             // Clean up the backend stage now that um-react's card is gone.
             fetch(STAGE_URL + "/" + encodeURIComponent(stageId), { method: "DELETE" }).catch(function () {});
           }
@@ -177,14 +183,11 @@
     delete pending[stageId];
   }
 
-  // removeCardByFileName finds the decrypted card whose download filename matches
-  // and clicks um-react's own 删除 button, reusing um-react's native delete logic
-  // (Redux deleteFile + blob URL revocation). Matching by filename is robust to
-  // React re-renders, which would stale a stored element reference.
-  function removeCardByFileName(fileName) {
+  // A blob URL identifies the exact card even when several tracks share a title.
+  function removeCard(blobUrl) {
     var anchors = document.querySelectorAll('[data-testid="audio-download"]');
     for (var i = 0; i < anchors.length; i++) {
-      if (anchors[i].getAttribute("download") === fileName) {
+      if (anchors[i].getAttribute("href") === blobUrl) {
         var cardActions = anchors[i].parentElement;
         var delBtn = cardActions && cardActions.querySelector("button.btn-error");
         if (delBtn) {
@@ -197,7 +200,7 @@
 
   function processRow(row) {
     var anchor = findDownloadAnchor(row);
-    if (anchor) createImportButton(anchor);
+    if (anchor && anchor.getAttribute("href")) createImportButton(anchor);
   }
 
   function scan(root) {
@@ -209,6 +212,9 @@
     scan(document.body);
     var observer = new MutationObserver(function (mutations) {
       for (var i = 0; i < mutations.length; i++) {
+        var target = mutations[i].target;
+        var row = target.closest && target.closest('[data-testid="file-row"]');
+        if (row) processRow(row);
         var added = mutations[i].addedNodes;
         for (var j = 0; j < added.length; j++) {
           var node = added[j];
@@ -221,7 +227,7 @@
         }
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["href"] });
   }
 
   if (document.readyState === "loading") {

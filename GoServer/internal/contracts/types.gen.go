@@ -134,6 +134,23 @@ type Health struct {
 	Status string `json:"status"`
 }
 
+// KugouDatabaseStatus defines model for KugouDatabaseStatus.
+type KugouDatabaseStatus struct {
+	CanSelect bool `json:"canSelect"`
+	Custom    bool `json:"custom"`
+	KeyCount  int  `json:"keyCount"`
+}
+
+// KugouKeyQuery defines model for KugouKeyQuery.
+type KugouKeyQuery struct {
+	AudioHash string `json:"audioHash"`
+}
+
+// KugouKeyResult defines model for KugouKeyResult.
+type KugouKeyResult struct {
+	Key string `json:"key"`
+}
+
 // Link defines model for Link.
 type Link struct {
 	Label string `json:"label"`
@@ -440,6 +457,9 @@ type SongsHandleSortParamsType string
 
 // AuthHandleVerifyJSONRequestBody defines body for AuthHandleVerify for application/json ContentType.
 type AuthHandleVerifyJSONRequestBody AuthHandleVerifyJSONBody
+
+// DecryptKugouKeyJSONRequestBody defines body for DecryptKugouKey for application/json ContentType.
+type DecryptKugouKeyJSONRequestBody = KugouKeyQuery
 
 // DecryptHandleStageMultipartRequestBody defines body for DecryptHandleStage for multipart/form-data ContentType.
 type DecryptHandleStageMultipartRequestBody DecryptHandleStageMultipartBody

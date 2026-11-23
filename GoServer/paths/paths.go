@@ -91,6 +91,29 @@ func GetDecryptStagingDir(dataRoot string) string {
 	return filepath.Join(dataRoot, "decrypt-staging")
 }
 
+func GetKugouDir(dataRoot string) string {
+	return filepath.Join(dataRoot, "kugou")
+}
+
+func IsKugouDataPath(dataRoot, path string) bool {
+	private := GetKugouDir(dataRoot)
+	within := func(base, target string) bool {
+		rel, err := filepath.Rel(base, target)
+		return err == nil && filepath.IsLocal(rel)
+	}
+	if within(private, path) {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	if realPrivate, err := filepath.EvalSymlinks(private); err == nil {
+		private = realPrivate
+	}
+	return within(private, resolved)
+}
+
 // GetSnapshotsDir returns the snapshots directory path
 func GetSnapshotsDir(dataRoot string) string {
 	return filepath.Join(dataRoot, "snapshots")

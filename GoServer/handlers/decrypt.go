@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"broadcast-tool/converter"
+	"broadcast-tool/internal/kugoudb"
 	"broadcast-tool/models"
 	"broadcast-tool/paths"
 	"broadcast-tool/response"
@@ -26,8 +28,10 @@ import (
 // of window.opener/postMessage, which only works within a single browser on one
 // device.
 type DecryptHandler struct {
-	AppDataDir string
-	Converter  *converter.FFMpegConverter
+	AppDataDir  string
+	Converter   *converter.FFMpegConverter
+	Kugou       *kugoudb.Database
+	kugouPicker sync.Mutex
 }
 
 func NewDecryptHandler(appDataDir string, conv *converter.FFMpegConverter) *DecryptHandler {

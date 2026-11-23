@@ -18,6 +18,18 @@
         </n-list-item>
       </n-list>
     </n-card>
+    <n-card v-if="kugouDatabase?.canSelect" title="酷狗自动解密">
+      <n-space vertical>
+        <n-text>
+          {{ kugouDatabase.custom ? "使用选定的数据库" : "启动时自动查找本机酷狗数据库" }}
+          <template v-if="kugouDatabase.keyCount > 0">，已加载 {{ kugouDatabase.keyCount }} 个密钥</template>。
+        </n-text>
+        <n-space>
+          <n-button :disabled="busy" @click="changeKugouSource('POST')">选择本机数据库</n-button>
+          <n-button v-if="kugouDatabase.custom" :disabled="busy" @click="changeKugouSource('DELETE')">恢复自动查找</n-button>
+        </n-space>
+      </n-space>
+    </n-card>
     <n-card title="插件">
       <n-space>
         <n-button :disabled="busy" @click="installExample">安装示例布局</n-button>
@@ -75,12 +87,14 @@ import type { components } from "../../api/generated/contracts"
 
 type Retention = components["schemas"]["RetentionStatus"]
 type Recovery = components["schemas"]["Recovery"]
+type KugouDatabase = components["schemas"]["KugouDatabaseStatus"]
 
 const isLocal = runsInDesktop() || ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
 const audioWeeks = ref<number | null>(4)
 const metadataYears = ref<number | null>(2)
 const recoveries = ref<Recovery[]>([])
 const updates = ref<UpdateStatus>()
+const kugouDatabase = ref<KugouDatabase>()
 const fileInput = ref<HTMLInputElement>()
 const busy = ref(false)
 const error = ref("")
@@ -110,6 +124,10 @@ const saveRetention = () => perform(async () => showRetention(await localCall<Re
 }))))
 const collect = () => perform(async () => showRetention(await localCall<Retention>("/retention/collect", "POST")))
 const restore = (id: string) => perform(async () => showRetention(await localCall<Retention>("/retention/recoveries/" + id + "/restore", "POST")))
+const changeKugouSource = (method: "POST" | "DELETE") => perform(async () => {
+  const status = await localCall<KugouDatabase | undefined>("/decrypt/kugou/source", method)
+  if (status) kugouDatabase.value = status
+})
 const installExample = () => perform(async () => { activePlugins.value = await localCall<PluginSnapshot>("/plugins/example", "POST") })
 const configure = (id: string, enabled: boolean, layout: boolean) => perform(async () => {
   activePlugins.value = await localCall<PluginSnapshot>("/plugins/" + id, "PUT", JSON.stringify({ enabled, layout }))
@@ -141,6 +159,8 @@ const rollback = () => perform(async () => {
 const restart = () => perform(() => localCall("/updates/restart", "POST"))
 
 onMounted(() => {
+  if (isLocal) void localCall<KugouDatabase>("/decrypt/kugou/status")
+    .then(status => { kugouDatabase.value = status }).catch(() => {})
   if (isLocal) void perform(async () => {
     const [retention, status] = await Promise.all([
       localCall<Retention>("/retention"), apiV1<UpdateStatus>("/updates"), refreshExtensions(),

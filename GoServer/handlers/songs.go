@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -296,6 +297,11 @@ func (h *SongHandler) HandleImport(w http.ResponseWriter, r *http.Request) {
 	defer os.Remove(tempFile)
 
 	result, err := h.importService.ImportXlsx(tempFile, songType)
+	if errors.Is(err, snapshotstore.ErrPreImportSnapshot) {
+		log.Printf("Excel 导入备份失败: %v", err)
+		response.WriteError(w, http.StatusInternalServerError, "PRE_IMPORT_SNAPSHOT_FAILED", snapshotstore.ErrPreImportSnapshot.Error())
+		return
+	}
 	if err != nil {
 		response.WriteValidationError(w, err.Error())
 		return

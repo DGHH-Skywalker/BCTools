@@ -217,7 +217,7 @@ export function useFileProcessor(selectedDateRef: { value: string }, defaultTime
       item.status = "done"
     } catch (err: any) {
       item.status = "error"
-      item.error = err?.message || "处理失败"
+      item.error = err?.response?.data?.error?.message || err?.message || "处理失败"
       console.error("File processing error:", err)
     }
   }

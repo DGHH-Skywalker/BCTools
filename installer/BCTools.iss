@@ -1,9 +1,9 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "6.0.0-beta1"
+  #define MyAppVersion "6.0.0-beta1.1"
 #endif
 
 #ifndef MyAppNumericVersion
-  #define MyAppNumericVersion "5.10.0.1"
+  #define MyAppNumericVersion "5.10.0.2"
 #endif
 
 #define MyAppName "小播点歌工具"

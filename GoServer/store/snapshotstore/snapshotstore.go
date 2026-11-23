@@ -2,6 +2,7 @@ package snapshotstore
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,7 +13,11 @@ import (
 	"broadcast-tool/internal/repo"
 	"broadcast-tool/models"
 	"broadcast-tool/paths"
+
+	"github.com/google/uuid"
 )
+
+var ErrPreImportSnapshot = errors.New("导入前备份失败，已取消导入")
 
 // SnapshotStore handles daily and pre-import snapshots.
 type SnapshotStore struct {
@@ -51,23 +56,15 @@ func (s *SnapshotStore) EnsureDailySnapshot() {
 	s.cleanSnapshots()
 }
 
-// CreatePreImportSnapshot creates a snapshot before import.
-func (s *SnapshotStore) CreatePreImportSnapshot() (string, error) {
-	snapshotsDir := paths.GetSnapshotsDir(s.repo.AppDataDir())
-	if err := os.MkdirAll(snapshotsDir, 0755); err != nil {
-		return "", fmt.Errorf("create snapshots dir: %w", err)
-	}
-	data, err := s.repo.SnapshotData()
-	if err != nil {
-		return "", fmt.Errorf("marshal: %w", err)
-	}
-	filename := fmt.Sprintf("snapshot-pre-import-%d.json", time.Now().Unix())
-	path := filepath.Join(snapshotsDir, filename)
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return "", fmt.Errorf("write pre-import snapshot: %w", err)
+// CreatePreImportSnapshot backs up the state supplied by the import transaction.
+func (s *SnapshotStore) CreatePreImportSnapshot(data *repo.Data) error {
+	now := time.Now()
+	filename := fmt.Sprintf("snapshot-pre-import-%d-%09d-%s.json", now.Unix(), now.Nanosecond(), uuid.NewString())
+	if err := s.repo.SaveSnapshot(filename, data); err != nil {
+		return fmt.Errorf("%w: %w", ErrPreImportSnapshot, err)
 	}
 	s.logger("pre-import snapshot: %s", filename)
-	return filename, nil
+	return nil
 }
 
 // RestoreFromSnapshot restores data from a snapshot file.

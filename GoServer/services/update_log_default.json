@@ -1,13 +1,14 @@
 {
   "schemaVersion": 1,
-  "id": "6.0.0-beta1-2026-11-20",
-  "version": "6.0.0-beta1",
-  "publishedAt": "2026-11-20T00:00:00Z",
-  "expiresAt": "2027-02-18T00:00:00Z",
-  "title": "BCTools 6.0.0-beta1 更新日志",
+  "id": "6.0.0-beta1.1-2026-11-23",
+  "version": "6.0.0-beta1.1",
+  "publishedAt": "2026-11-23T00:00:00Z",
+  "expiresAt": "2027-02-21T00:00:00Z",
+  "title": "BCTools 6.0.0-beta1.1 更新日志",
   "content": [
-    "浏览器继续作为默认启动方式，desktop 参数打开独立窗口。",
-    "加入按周音频保留和可恢复的回收区。"
+    "主程序可直接导入酷狗加密歌曲，支持从本机数据库自动取钥。",
+    "修复 Excel 批量导入的重复 ID。导入前备份失败时会取消导入，保留当前歌单。",
+    "修复 um-react 回传音频时导入按钮和重复回传的问题。"
   ],
-  "downloadUrl": "https://github.com/DGHH-Skywalker/BCTools/releases/latest"
+  "downloadUrl": "https://github.com/DGHH-Skywalker/BCTools/releases/tag/v6.0.0-beta1.1"
 }

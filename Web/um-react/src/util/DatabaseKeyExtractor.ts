@@ -25,8 +25,8 @@ export class DatabaseKeyExtractor {
   constructor(private SQL: SQLStatic) {}
 
   private hasTable(db: SQLDatabase, name: string): boolean {
-    const tables = db.exec('SELECT name FROM sqlite_master WHERE type="table"')[0].values.map((x) => x[0]);
-    return tables.includes(name);
+    const tables = db.exec('SELECT name FROM sqlite_master WHERE type="table"')[0]?.values.map((x) => x[0]);
+    return tables?.includes(name) ?? false;
   }
 
   extractQmcV2KeysFromSqliteDb(buffer: ArrayBuffer): null | QMAndroidKeyEntry[] {
@@ -64,36 +64,31 @@ export class DatabaseKeyExtractor {
     let db: SQLDatabase | null = null;
 
     try {
-      KuGou.decryptDatabase(dbBuffer);
+      const header = new TextDecoder().decode(dbBuffer.subarray(0, 16));
+      if (header !== 'SQLite format 3\0') KuGou.decryptDatabase(dbBuffer);
       db = new this.SQL.Database(dbBuffer);
 
-      let sql: undefined | string;
+      const queries: string[] = [];
       if (this.hasTable(db, 'ShareFileItems')) {
-        sql = `
-          select H, K from (
-            select EncryptionKeyId as H, EncryptionKey as K from ShareFileItems
-            union all
-            select EnHash as H, EnKey as K from DownloadItem
-          ) t
-          where
-                  t.H is not null and t.H != ''
-              and t.K is not null and t.K != ''
-          group by t.H
-        `;
+        queries.push('SELECT EncryptionKeyId AS H, EncryptionKey AS K FROM ShareFileItems');
       }
-      if (!sql) return null;
+      if (this.hasTable(db, 'DownloadItem')) {
+        queries.push('SELECT EnHash AS H, EnKey AS K FROM DownloadItem');
+      }
+      if (!queries.length) return null;
 
-      const result = db.exec(sql);
+      const result = db.exec(`SELECT H, K FROM (${queries.join(' UNION ALL ')})
+        WHERE LENGTH(H) BETWEEN 1 AND 256 AND LENGTH(K) BETWEEN 1 AND 4096`);
       if (result.length === 0) {
         return [];
       }
 
-      const keys = result[0].values;
-      return keys.map(([audioHash, ekey]) => ({
-        // strip dir name
-        audioHash: String(audioHash).normalize(),
-        ekey: String(ekey).normalize(),
-      }));
+      const keys = new Map<string, string>();
+      for (const [hash, key] of result[0].values) {
+        const audioHash = String(hash).normalize();
+        if (!keys.has(audioHash)) keys.set(audioHash, String(key).normalize());
+      }
+      return Array.from(keys, ([audioHash, ekey]) => ({ audioHash, ekey }));
     } finally {
       db?.close();
     }

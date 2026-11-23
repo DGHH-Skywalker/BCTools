@@ -1,6 +1,6 @@
 {
   "name": "bctools",
-  "version": "6.0.0-beta1",
+  "version": "6.0.0-beta1.1",
   "private": true,
   "description": "小播点歌工具 — Vue、um-react、Go 与 Inno Setup 的一体化构建入口。",
   "type": "module",

@@ -2,4 +2,4 @@
 // Update this constant when bumping the version in Web/package.json and GoServer/versioninfo.json.
 package version
 
-const Version = "6.0.0-beta1"
+const Version = "6.0.0-beta1.1"

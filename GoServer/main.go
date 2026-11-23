@@ -24,6 +24,7 @@ import (
 	"broadcast-tool/converter"
 	"broadcast-tool/handlers"
 	"broadcast-tool/internal/binembed"
+	"broadcast-tool/internal/kugoudb"
 	"broadcast-tool/internal/plugins"
 	"broadcast-tool/internal/repo"
 	"broadcast-tool/internal/updates"
@@ -322,6 +323,13 @@ func newBackend(ctx context.Context, appDataDir string, port int, migratedLegacy
 		log.Println("WARNING: Audio conversion requires ffmpeg.exe and ffprobe.exe.")
 	}
 	conv := converter.New(ffmpegPath, ffprobePath)
+	kugou := kugoudb.New(appDataDir)
+	if err := kugou.Initialize(ctx); err != nil {
+		log.Printf("更新酷狗数据库副本: %v", err)
+	}
+	conv.KugouKey = kugou.Key
+	decrypt := handlers.NewDecryptHandler(appDataDir, conv)
+	decrypt.Kugou = kugou
 
 	// 6. MusicLibrary：周文件夹（MusicFiles\<YYYY年第N周>）布局引擎
 	library := services.NewMusicLibrary(appDataDir, repository, conv, logger)
@@ -388,7 +396,7 @@ func newBackend(ctx context.Context, appDataDir string, port int, migratedLegacy
 		UpdateLog: handlers.NewUpdateLogHandler(updateLogService),
 		Network:   networkInfo,
 		System:    handlers.NewSystemHandler(appDataDir, version.Version),
-		Decrypt:   handlers.NewDecryptHandler(appDataDir, conv),
+		Decrypt:   decrypt,
 		Lifecycle: lifecycle,
 	})
 

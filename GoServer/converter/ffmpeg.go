@@ -13,6 +13,7 @@ type FFMpegConverter struct {
 	ffmpegPath  string
 	ffprobePath string
 	semaphore   chan struct{} // limits concurrent conversions
+	KugouKey    func(string) string
 }
 
 // New creates a new converter with the given ffmpeg/ffprobe paths

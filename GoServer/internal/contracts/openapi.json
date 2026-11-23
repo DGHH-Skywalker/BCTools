@@ -138,6 +138,140 @@
         }
       }
     },
+    "/api/v1/decrypt/kugou/key": {
+      "post": {
+        "operationId": "DecryptKugouKey",
+        "tags": [
+          "Decrypt"
+        ],
+        "responses": {
+          "200": {
+            "description": "Key for the requested hash",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KugouKeyResult"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No matching key"
+          },
+          "default": {
+            "description": "Application error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KugouKeyQuery"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/v1/decrypt/kugou/source": {
+      "post": {
+        "operationId": "DecryptKugouSelect",
+        "tags": [
+          "Decrypt"
+        ],
+        "responses": {
+          "200": {
+            "description": "Local database configuration and available key count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KugouDatabaseStatus"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "File picker canceled"
+          },
+          "default": {
+            "description": "Application error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "DecryptKugouReset",
+        "tags": [
+          "Decrypt"
+        ],
+        "responses": {
+          "200": {
+            "description": "Local database configuration and available key count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KugouDatabaseStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Application error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/decrypt/kugou/status": {
+      "get": {
+        "operationId": "DecryptKugouStatus",
+        "tags": [
+          "Decrypt"
+        ],
+        "responses": {
+          "200": {
+            "description": "Local database configuration and available key count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KugouDatabaseStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Application error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/decrypt/stage": {
       "post": {
         "operationId": "DecryptHandleStage",
@@ -3126,6 +3260,50 @@
             "type": "string"
           }
         }
+      },
+      "KugouDatabaseStatus": {
+        "type": "object",
+        "properties": {
+          "canSelect": {
+            "type": "boolean"
+          },
+          "custom": {
+            "type": "boolean"
+          },
+          "keyCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "canSelect",
+          "custom",
+          "keyCount"
+        ]
+      },
+      "KugouKeyQuery": {
+        "type": "object",
+        "properties": {
+          "audioHash": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "audioHash"
+        ]
+      },
+      "KugouKeyResult": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ]
       }
     },
     "securitySchemes": {

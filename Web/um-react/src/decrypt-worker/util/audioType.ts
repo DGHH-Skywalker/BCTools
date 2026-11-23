@@ -1,16 +1,15 @@
 import { detectAudioType } from '@unlock-music/crypto';
 
 export function detectAudioExtension(buffer: Uint8Array): string {
-  let neededLength = 0x100;
-  let extension = 'bin';
-  while (neededLength !== 0) {
-    console.debug('AudioDetect: read %d bytes', neededLength);
-    const detectResult = detectAudioType(buffer.subarray(0, neededLength));
-    extension = detectResult.audioType;
-    neededLength = detectResult.needMore;
+  let length = Math.min(0x100, buffer.byteLength);
+  for (;;) {
+    const detectResult = detectAudioType(buffer.subarray(0, length));
+    const extension = detectResult.audioType;
+    const nextLength = Math.min(detectResult.needMore, buffer.byteLength);
     detectResult.free();
+    if (nextLength <= length) return extension;
+    length = nextLength;
   }
-  return extension;
 }
 
 export function isDataLooksLikeAudio(buffer: Uint8Array): boolean {
