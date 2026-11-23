@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Data represents the full data file structure.
+// Data is the in-memory aggregate assembled from the split storage layout.
 type Data struct {
 	NextSongID     int64           `json:"nextSongId,omitempty"`
 	DormSongs      []models.Song   `json:"dormSongs"`
