@@ -73,9 +73,9 @@ BctoolData/
 └── bin/                         # 运行时释放的 FFmpeg、ffprobe
 ```
 
-从旧版启动时，程序会迁移 `%APPDATA%\BroadcastTool` 中的数据，并将单体 `data.json` 升级为拆分布局。旧目录不会被删除；迁移前的 `data.v1-backup.json` 按保留策略暂存七天。
+对于仍使用 `%APPDATA%\BroadcastTool` 的旧版，程序会将数据迁移到当前程序旁的 `BctoolData`，原目录保留。单体 `data.json` 还会升级为拆分布局；迁移前的 `data.v1-backup.json` 按保留策略暂存七天。
 
-便携版迁移数据时，复制整个 `BctoolData`。降级到旧版前，请退出 Beta，并恢复升级前备份的完整数据目录；旧版无法直接读取新版拆分布。
+迁移数据时复制整个 `BctoolData`。降级到旧版前，请退出 Beta，并恢复升级前备份的完整数据目录；旧版无法直接读取新版拆分布局。
 
 ## 安全与使用边界
 
