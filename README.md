@@ -1,167 +1,127 @@
-# 小播点歌工具（BCTools）
+# BCTools
 
-面向校园广播站的本地点歌与歌单管理工具。单文件 `.exe`，双击即用，数据全部留在本机。
+小播点歌工具，用于校园广播站的宿舍歌单、播音歌单、音频整理和 SD 卡导出。
 
-![版本](https://img.shields.io/badge/version-6.0.0--beta1-0086C3)
-![平台](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
-![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
-![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white)
+[![Release](https://img.shields.io/github/v/release/DGHH-Skywalker/BCTools?include_prereleases&label=Release)](https://github.com/DGHH-Skywalker/BCTools/releases)
+![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## 这个工具解决什么问题
+> [!IMPORTANT]
+> v6.0.0 目前处于 Beta。新版使用拆分后的数据布局，升级前请退出旧版并完整备份 `BctoolData`。需要稳定版时，请使用 v5.8.0.0。
 
-学校广播站每周要排一份宿舍播放歌单：哪天几点放哪首歌，然后把音频按播放顺序
-命名成 `01.mp3`、`02.mp3` 拷到 SD 卡插进播放器。手工做这件事很容易出错——
-漏了一个时段，后面所有曲序就整体错位。
+## 下载与启动
 
-BCTools 把这套流程做成了：
+从 [Releases](https://github.com/DGHH-Skywalker/BCTools/releases) 下载 Windows x64 版本：
 
-- **排歌单**：按「周 × 时段」的网格拖拽安排歌曲，自动查重（默认回溯 30 天）
-- **导入音频**：拖进来自动转码成 MP3，支持网易云 `.ncm` 等加密格式
-- **换卡导出**：一键把整周歌曲按序号复制到 SD 卡，**空时段自动生成静音占位**，
-  保证曲序与贴出的歌单严格对应
-- **出图**：把歌单渲染成海报或表格图片，直接发群里
-- **手机点歌**：局域网内扫码，同学用手机就能提交
+| 文件 | 用途 |
+| --- | --- |
+| `BCTools-Setup.exe` | 安装程序，支持当前用户或所有用户安装 |
+| `bctools.exe` | 便携版，无需安装 |
+| `SHA256SUMS.txt` | 下载文件校验值 |
+| `BCTools-UpdateTargets.zip` | 维护者发布签名更新时使用的目标文件 |
+| `FFmpeg-Sources.tar.gz` | 内置 FFmpeg、LAME 的对应源码、构建脚本和许可证 |
 
-## 快速开始
+BCTools 有两种使用方式：
 
-到 [Releases](../../releases) 下载：
+```powershell
+# 默认浏览器，地址为 http://localhost:1743/
+.\bctools.exe
 
-| 文件 | 说明 |
-|------|------|
-| `BCTools-Setup.exe` | 安装程序（推荐） |
-| `bctools.exe` | 免安装单文件版 |
-
-双击默认打开浏览器访问 `http://localhost:1743/`。执行 `bctools.exe desktop` 可用 WebView2 独立窗口。两种方式共用数据，局域网设备可继续扫码打开网页。
-**右键**菜单可退出后端。
-
-> 内置精简版 ffmpeg/ffprobe，无需另装。首次运行会释放到程序旁的 `BctoolData\bin`。
-
-新版在设置页提供歌曲保留期、七天回收区、插件和更新管理。开放接口契约可从 `/api/v1/openapi.json` 读取。更新发布配置见 [签名更新](docs/SIGNED_UPDATES.md)。
-
-## 功能一览
-
-| 页面 | 作用 |
-|------|------|
-| 宿舍歌单 `/dorm/manage` | 按周 × 时段拖拽排歌，第 8 张「待分配」卡片收纳未分配时段的歌 |
-| 时段配置 `/dorm/manage/slots` | 自定义每天的播放时间点 |
-| 播音歌单 `/broadcast` | 午间/午后播音歌单，支持 Excel 列映射导入 |
-| 歌单导出 `/export` | 导出海报图/表格图，可设背景、模糊、文案、假期角标 |
-| 换卡工具 `/organize` | 按序号复制整周音频到 SD 卡，空位生成静音占位 |
-| 音乐解锁 `/um-react` | 内置 [Unlock Music](https://git.unlock-music.dev/um/web)，解密后一键导入 |
-| 手机点歌 `/mobile` | 显示局域网二维码 |
-
-## 技术栈
-
-- **前端**：Vue 3 + TypeScript + Vite + Naive UI + Pinia + vue-router（hash 模式）
-- **后端**：Go + chi/v5 + `embed.FS`（前端与 ffmpeg 全部嵌进单个 exe）
-- **桌面**：Wails v3 + WebView2，浏览器模式沿用 `fyne.io/systray`
-- **音频**：内嵌精简版 ffmpeg/ffprobe；`.ncm` 等解密复用
-  [unlock-music](https://git.unlock-music.dev/um/cli) 解码器
-- **安装程序**：Inno Setup 6（`installer/BCTools.iss`）
-
-## 从源码构建
-
-Windows 构建使用 Go 1.26.11、Node.js 24、Corepack 和 Inno Setup 6。完整构建前需准备仓库的精简版 FFmpeg；GitHub Actions 会完成这一步。
-
-```bash
-git clone <repo-url> BCTools      # 5.6.0 起 um-react 已直接放进仓库，无需 --recursive
-cd BCTools
-npm ci
-npm --prefix Web ci --legacy-peer-deps
-corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
-npm run build                     # 并行准备前端 / um-react / ffmpeg，再编译主程序与安装包
+# 独立桌面窗口，需要 Microsoft Edge WebView2 Runtime
+.\bctools.exe desktop
 ```
 
-> 构建与发版见 [开发指南](./DEVELOPER.md)，迁移验证见 [Beta 审查](docs/BETA1_REVIEW.md)。
+两种模式共用同一个 Go 后端和数据目录，局域网设备仍可通过 `1743` 端口访问。重复启动会唤回已有实例；从浏览器模式进入桌面模式时，由原后端完成交接。托盘菜单可重新打开界面或退出程序。
+
+```powershell
+# 关闭正在运行的实例
+.\bctools.exe --shutdown
 ```
 
-产物输出到 `dist/`：
+## 功能
 
-| 产物 | 说明 |
-|------|------|
-| `bctools.exe` | 主程序（单文件，内嵌前端 + ffmpeg） |
-| `BCTools-Setup.exe` | 安装程序 |
+- **宿舍歌单**：按周和时段安排歌曲，支持拖拽排序、待分配歌曲和重复提示。
+- **播音歌单**：管理午间、午后栏目，支持 Excel 批量导入；覆盖导入前会创建可恢复的快照。
+- **音频导入**：常见音频统一转为 MP3；支持 NCM，以及 KGG、KGM、KGMA、VPR 等酷狗加密格式。酷狗取钥数据库可自动查找，也可在设置中手动指定。
+- **歌曲文件导出**：按周和播放顺序写入 SD 卡。空时段生成 17.43 秒静音占位，同一时段的多首歌按顺序合并。
+- **歌单图片**：导出简约表格或海报图片，可配置背景、模糊、文案和徽章。
+- **手机点歌**：通过局域网二维码打开点歌页面。
+- **音乐解锁**：内嵌 um-react，解密结果可回传主程序导入。
+- **数据维护**：按保留期清理音频和歌曲信息，清理内容先进入七天回收区。
+- **扩展与更新**：支持页面、布局和 WASM 命令插件；提供基于 TUF 的签名更新机制。
 
-可单独执行的构建步骤：
+## 数据与升级
 
-```bash
-npm run build:web                 # Vue 构建与类型检查
-npm run build:um-react            # React 子项目构建并复制嵌入资源
-npm run build:server-only         # 仅编译主程序
-npm run build:installer           # 仅编译安装程序
-npm run build:clean               # 清理所有构建产物
+正式版的数据保存在程序所在目录的 `BctoolData`：
+
+```text
+BctoolData/
+├── data.json                    # 存储版本、设置、下一歌曲 ID 和周目录索引
+├── songs-without-audio.json     # 没有对应音频的歌曲记录
+├── MusicFiles/
+│   ├── _staging/                # 待归档音频
+│   └── <YYYY年第N周>/            # 周音频、songs.json 和导出索引
+├── snapshots/                   # 覆盖导入等操作前的快照
+├── recycle/                     # 保留期清理的七天回收区
+├── plugins/                     # 插件包与启用状态
+├── updates/                     # 已验证的更新文件和状态
+├── kugou/                       # 经验证的酷狗数据库副本
+├── decrypt-staging/             # um-react 回传暂存
+├── deleted_songs_log.json
+├── logs/
+├── temp/
+└── bin/                         # 运行时释放的 FFmpeg、ffprobe
 ```
 
-> `um-react` 是 Git submodule。忘记 `--recursive` 的话补一句
-> `git submodule update --init --recursive`。
+对于仍使用 `%APPDATA%\BroadcastTool` 的旧版，程序会将数据迁移到当前程序旁的 `BctoolData`，原目录保留。单体 `data.json` 还会升级为拆分布局；迁移前的 `data.v1-backup.json` 按保留策略暂存七天。
+
+迁移数据时复制整个 `BctoolData`。降级到旧版前，请退出 Beta，并恢复升级前备份的完整数据目录；旧版无法直接读取新版拆分布局。
+
+## 安全与使用边界
+
+- 仅提供 Windows 10/11 x64 构建。桌面模式依赖 WebView2，浏览器模式不要求安装额外运行时。
+- 旧版管理接口没有完整的会话鉴权，能访问 `1743` 端口的设备可能调用歌单、设置、快照和文件操作。请在可信局域网内使用，不要将端口暴露到公网。
+- 保留期、插件、酷狗数据库和更新等新增管理操作仅接受本机请求。
+- 当前 Beta 未预置生产更新仓库和签名根，更新请从 GitHub Releases 下载。签名更新的配置方法见 [docs/SIGNED_UPDATES.md](docs/SIGNED_UPDATES.md)。
 
 ## 开发
 
 ```bash
-# 前端
-cd Web
-npm install --legacy-peer-deps
-npm run dev          # 开发服务器，API 代理到 :1743
-npm run type-check
+git clone https://github.com/DGHH-Skywalker/BCTools.git
+cd BCTools
+npm ci
+npm --prefix Web ci --legacy-peer-deps
+corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
+
+npm run dev
 npm run test
-
-# 后端
-cd GoServer
-go vet ./...
-go test ./...
+npm run type-check
 ```
 
-## 目录结构
+完整 Windows 构建：
 
-```
-BCTools/
-├── GoServer/            Go 后端
-│   ├── handlers/        HTTP 接口（含 lifecycle：health/watch/shutdown）
-│   ├── routes/          路由注册
-│   ├── services/        业务编排（导入、换卡、设置更新）
-│   ├── store/           领域数据访问
-│   ├── internal/repo/   data.json 原子写入与并发控制
-│   ├── converter/       音频转码 / 解密 / 格式嗅探
-│   ├── platform/        系统交互（隐藏窗口执行命令、打开浏览器）
-│   ├── tray/            任务栏托盘控件
-│   └── main.go
-├── Web/                 Vue 3 前端
-│   ├── src/{views,components,stores,composables,api,utils,styles,constants}
-│   └── um-react/        Unlock Music 子模块
-├── installer/           C++ Win32/GDI+ 安装/卸载程序
-├── docs/                设计与交接文档
-└── package.json          一体化开发与构建入口
+```bash
+npm run build
 ```
 
-API 文档见 [`GoServer/docs/api.md`](GoServer/docs/api.md)。
+环境要求、构建步骤和发布流程见 [DEVELOPER.md](DEVELOPER.md)；常见工具链问题见 [TOOLS.md](TOOLS.md)。
 
-## 数据目录
+## 项目结构
 
-所有数据留在本机 `%APPDATA%\BroadcastTool\`：
+| 路径 | 内容 |
+| --- | --- |
+| `Web/` | Vue 3、TypeScript、Vite 主界面 |
+| `Web/um-react/` | 内嵌的 Unlock Music React 源码 |
+| `GoServer/` | Go 后端、浏览器/桌面运行时、存储、插件和更新 |
+| `GoServer/internal/contracts/` | OpenAPI 契约及生成的 Go 类型 |
+| `installer/` | Inno Setup 安装脚本；旧 C++ 安装器仅作历史对照 |
+| `scripts/` | 构建、契约生成和发布辅助脚本 |
+| `docs/` | 当前运维文档与版本历史记录 |
 
-```
-├── data.json               主数据（歌单 + 设置）
-├── deleted_songs_log.json  删除日志
-├── songs/                  歌曲文件
-├── snapshots/              每日快照备份
-├── decrypt-staging/        um-react 解密暂存
-├── temp/                   临时目录（启动时清空）
-├── logs/                   滚动日志
-└── bin/                    运行时释放的 ffmpeg/ffprobe
-```
-
-## 已知限制
-
-- **无鉴权**：不实现后端 session/JWT，任何能访问该端口的设备都能调用管理接口。
-  **只在可信局域网内运行**。`POST /api/shutdown` 是例外，仅接受本机请求。
-- `data.json` 全量读写，当前数据量下足够；极大数据量需改造。
-- 前端 `en.json` 保留结构但未启用，默认 locale 为 `zh-CN`。
-- 仅面向 Windows 10/11；其他平台可编译，但托盘等功能为空实现。
+接口说明见 [GoServer/docs/api.md](GoServer/docs/api.md)，运行时可读取 `/api/v1/openapi.json`。
 
 ## 许可证
 
-代码以 [MIT](LICENSE) 发布。
+项目代码以 [MIT](LICENSE) 发布。字体、图片、FFmpeg、LAME、Unlock Music 及其他第三方组件遵循各自许可证，不因仓库主许可证而改变。
 
-**注意**：仓库中的中文字体（江西拙楷、方正颜宋等）与图片素材**不在 MIT 范围内**，
-版权归各自作者，商用请自行确认授权。内嵌 ffmpeg 遵循其自身许可（LGPL/GPL）；
-`.ncm` 解密能力来自 unlock-music，请仅用于解锁自己已购买的音乐。
+请仅处理自己有权使用的音频文件。

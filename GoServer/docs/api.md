@@ -1,426 +1,80 @@
-# BroadcastTool API 契约
+# BCTools HTTP API
 
-> 基线路径：`/api`（前端必须使用相对路径，禁止硬编码 localhost:1743）
+当前接口以 `/api/v1` 为开发入口。完整请求、响应和错误结构以 [OpenAPI 契约](../internal/contracts/openapi.json) 为准；运行中的实例可通过以下地址读取同一份契约：
 
-## 通用错误响应
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "用户可理解的错误描述"
-  }
-}
+```text
+http://localhost:1743/api/v1/openapi.json
 ```
 
-错误码：
-- `VALIDATION_ERROR` - 输入校验失败
-- `NOT_FOUND` - 资源不存在
-- `INTERNAL_ERROR` - 服务器内部错误
-- `UNAUTHORIZED` - 未认证
-- `FORBIDDEN` - 禁止访问
-- `FILE_ERROR` - 文件操作失败
-- `CONVERSION_ERROR` - 音频转换失败
-- `DATA_CORRUPTED` - 数据损坏
-- `UNSUPPORTED_ENCRYPTED_FORMAT` - 不支持的加密格式
-- `ENCRYPTED_FILE_INVALID` - 加密文件无效
-- `ENCRYPTION_DECRYPT_FAILED` - 解密失败
+前端使用相对路径，不写死主机名或端口。`/api` 保留原有兼容路由，新能力只注册在 `/api/v1`。
 
-## 健康检查
+## 路由范围
 
-`GET /api/health`
+### `/api` 与 `/api/v1` 共用
 
-响应：
-```json
-{ "status": "ok" }
+| 分组 | 内容 |
+| --- | --- |
+| `/health`、`/lifecycle/*`、`/shutdown` | 健康检查与进程生命周期 |
+| `/songs/*` | 宿舍、播音歌曲的查询、创建、更新、排序、导入和导出 |
+| `/files/*` | 音频处理、暂存、周文件导出、试听、合并与目录选择 |
+| `/settings`、`/auth/*` | 设置与高级设置密码验证 |
+| `/snapshots/*` | 快照列表与恢复 |
+| `/check-update`、`/update-log/*` | 兼容更新检查与更新日志展示 |
+| `/system/status`、`/network/*` | 系统状态、局域网地址与二维码 |
+| `/decrypt/stage/*` | um-react 解密文件的暂存、回传和清理 |
+
+### 仅 `/api/v1`
+
+| 分组 | 内容 |
+| --- | --- |
+| `/openapi.json` | 当前 OpenAPI 契约 |
+| `/retention/*` | 保留期设置、立即清理与回收批次恢复 |
+| `/plugins/*` | 插件查询、安装、启停、布局切换、卸载和 WASM 命令 |
+| `/updates/*` | 签名更新状态、检查、应用、网页确认与回滚、核心程序重启 |
+| `/decrypt/kugou/*` | 酷狗数据库状态、手动选择、恢复自动查找与取钥 |
+
+桌面模式另提供 `/api/desktop/window` 和 `/api/desktop/save`，用于窗口管理与原生保存对话框。它们由桌面运行时处理，不属于 LAN 通用接口。
+
+## 访问边界
+
+- 旧 `/api` 及共用核心路由保留原有 LAN 行为，没有完整的会话鉴权。能访问端口的设备可能调用管理功能，只允许在可信网络中运行。
+- 保留期设置与清理、插件写操作和命令、更新检查与应用、酷狗数据库配置等新增管理操作仅接受本机请求。
+- `/shutdown`、`/close-browser` 和桌面专用操作有本机限制。
+- 插件和更新的部分只读状态接口可用于页面展示，不代表对应写操作向 LAN 开放。
+
+新增接口时先确定调用方是浏览器、本机桌面窗口还是局域网设备，再在 `GoServer/routes/routes.go` 中选择相应的访问控制。
+
+## 契约与生成类型
+
+契约源文件：
+
+```text
+GoServer/internal/contracts/openapi.json
 ```
 
-## 生命周期
+修改契约后，从仓库根目录运行：
 
-托盘控件（任务栏图标）通过这组端点与前端页面协作退出。
-
-### 等待关闭通知
-
-`GET /api/lifecycle/watch`
-
-长轮询：请求会一直挂起，直到后端准备退出才返回。前端据此在后端退出前尝试
-`window.close()` 自行关闭页面（浏览器常拦截脚本关闭标签页，因此是 best-effort）。
-客户端断开时服务端直接放弃该请求，不泄漏 goroutine。
-
-响应（仅在后端即将退出时）：
-```json
-{ "closing": true }
+```bash
+npm run generate:api
 ```
 
-### 请求关闭后端
+生成并提交：
 
-`POST /api/shutdown`
+- `GoServer/internal/contracts/types.gen.go`
+- `Web/src/api/generated/contracts.ts`
 
-**仅接受来自本机（loopback）的请求**，局域网内其他设备调用返回 403，
-避免任何能访问该端口的设备都能关掉服务。
+不要手工修改生成文件。CI 会重新生成并检查差异。
 
-响应：
-```json
-{ "status": "closing" }
-```
+## 业务约定
 
-错误：
-- `403 FORBIDDEN` - 非本机请求
-- `501 NOT_IMPLEMENTED` - 当前运行模式未接入关闭回调
+OpenAPI 描述数据格式，以下约束还需要结合后端实现与测试理解：
 
-### 关闭浏览器（兼容保留）
+- 歌曲 ID 由服务端分配，批量导入和并发新增不能复用同一 ID。
+- 覆盖导入先创建独立快照；备份失败时取消导入。
+- 歌曲记录按是否有对应音频拆分存储，客户端不应假设 `data.json` 包含完整歌单。
+- 周文件导出按时段位置编号。空时段生成静音占位，同一时段多首歌在导出时合并。
+- um-react 回传优先使用暂存 ID 就地导入；下载暂存文件的接口保留给需要原始字节的场景。
+- 保留期清理产生可恢复批次，恢复接口只接受有效且未过期的回收记录。
+- 插件与更新接口只处理通过格式、权限、签名和完整性校验的内容。
 
-`POST /api/close-browser`
-
-仅记录日志，不会退出后端。同样限制为本机请求。
-
-## 歌曲
-
-### 模型
-
-```typescript
-interface Song {
-  id: number
-  date: string        // YYYY-MM-DD
-  weekday: string     // 计算字段，如"周一"
-  title: string
-  artist: string
-  remark: string
-  filePath: string
-  timeSlotId: string | null
-  createdAt: string   // RFC3339
-}
-```
-
-### 列表/查询
-
-`GET /api/songs?type=dorm|broadcast&dates=2026-07-20,2026-07-21`
-
-响应：`Song[]`
-
-### 获取单个
-
-`GET /api/songs/:id`
-
-响应：`Song`
-
-### 创建
-
-`POST /api/songs`
-
-请求体：
-```json
-{
-  "type": "dorm",
-  "date": "2026-07-25",
-  "title": "歌曲名",
-  "artist": "歌手",
-  "remark": "备注",
-  "filePath": "temp/xxx.mp3",
-  "timeSlotId": null
-}
-```
-
-响应：`Song` (201)
-
-### 更新
-
-`PUT /api/songs/:id`
-
-请求体只包含需要更新的字段。`timeSlotId: null` 表示取消分配。
-
-响应：`Song`
-
-### 删除
-
-`DELETE /api/songs/:id`
-
-响应：`204 No Content`
-
-### 导入 XLSX
-
-`POST /api/songs/import?type=dorm|broadcast`
-
-上传字段：`file`（xlsx）
-
-响应：
-```json
-{
-  "inserted": 10,
-  "skipped": 0,
-  "errors": [{ "row": 3, "message": "日期格式错误" }]
-}
-```
-
-### 导出 XLSX
-
-`GET /api/songs/export?type=dorm|broadcast&dates=...`
-
-响应：Blob，Content-Type `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
-
-## 文件处理
-
-### 处理/转码
-
-`POST /api/files/process`
-
-上传字段：`file`
-
-支持：ncm、mp3、flac、wav、mp4 等。NCM 由后端 unlock-music 库解密并转码为 MP3。
-
-响应：
-```json
-{
-  "tempFileName": "uuid.mp3",
-  "title": "歌名",
-  "artist": "歌手"
-}
-```
-
-### MP3 暂存
-
-`POST /api/files/stash`
-
-上传字段：`file`（mp3）
-
-不转码，仅提取标签。
-
-响应：同 `/api/files/process`
-
-### 文件整理
-
-`POST /api/files/organize`
-
-请求体：
-```json
-{
-  "entries": [
-    { "source": "temp/xxx.mp3", "targetName": "01.mp3" },
-    { "sources": ["a.mp3", "b.mp3"], "targetName": "02.mp3" },
-    { "source": "", "targetName": "03.mp3" }
-  ],
-  "targetDir": "D:/target",
-  "mode": "copy",
-  "confirm": false
-}
-```
-
-条目的三种形态（一个时段 = 一个序号 = SD 卡上一个文件）：
-
-| 形态 | 行为 |
-|------|------|
-| `source` 非空 | 单首歌，直接复制/移动 |
-| `sources` 长度 > 1 | 同一时段多首歌，**按顺序合并成一个 MP3** |
-| 两者都为空 | 该时段没歌，生成静音占位 |
-
-合并只发生在导出时，歌库里仍然分开存放；合并模式下**绝不删除源文件**
-（即使 `mode` 是 `move`）。任一源文件校验失败或缺失时整条跳过，
-不会在 SD 卡上留下残缺文件。
-
-响应：
-```json
-{
-  "successful": [{ "source": "...", "target": "..." }],
-  "failed": [{ "source": "...", "reason": "..." }],
-  "confirmNeeded": true,
-  "existingFiles": ["01.mp3"]
-}
-```
-
-多文件合并的条目，响应里的 `source` 为各源以 `" + "` 连接的字符串。
-
-### 合并音频
-
-`POST /api/files/merge`
-
-请求体：
-```json
-{ "sources": ["a.mp3", "b.mp3"] }
-```
-
-按顺序合并并直接返回 `audio/mpeg` 字节流。供前端「文件系统访问 API」
-那条导出路径使用——那条路径由浏览器自行写入 SD 卡，拿不到服务端内部的合并结果。
-
-**实现说明**：项目内置的精简版 ffmpeg 为压到 3.7 MB，只保留了 mp3 muxer 与 file
-协议，**没有** concat demuxer / concat 滤镜 / PCM muxer，标准的 ffmpeg 合并方案
-在这里全部不可用（实测三种均失败）。MPEG-1 Audio 是帧序列格式，天然支持首尾
-相接，因此采用字节拼接——无损、不重编码、速度快。唯一要处理的是标签：只保留
-第一个文件的 ID3v2，后续文件的 ID3v2 与所有 ID3v1 一律剥除，否则会成为流中间的
-非音频数据，导致播放器报 `Header missing` 并丢帧。
-
-实测：209.79 s + 228.15 s 合并后重新解码得 437.995 s，音频完整无损。
-
-### 选择文件夹
-
-`POST /api/files/select-dir`
-
-响应：
-```json
-{ "path": "D:/selected" }
-```
-
-用户取消时返回 `""`。
-
-### 浏览目录
-
-`GET /api/files/browse?dir=...`
-
-响应：
-```json
-{
-  "path": "D:/dir",
-  "dirs": ["sub"],
-  "files": ["a.mp3"]
-}
-```
-
-## 设置
-
-### 获取
-
-`GET /api/settings`
-
-响应（不含 `adminPasswordHash`）：
-```json
-{
-  "timeSlots": [...],
-  "allowTemplateJS": false,
-  "autoBackupPath": "",
-  "autoBackupEnabled": false,
-  "adminPasswordHint": "",
-  "locale": "zh-CN",
-  "version": "5.5.0.0",
-  "downloadUrl": ""
-}
-```
-
-> 注：静音占位时长固定为 17.43s（后端 `converter.DefaultSilentPlaceholder`），
-> 不再作为可配设置项。整天空着时该天所有时段都生成 17.43s 的静音占位，SD 卡
-> 上的曲序与歌单一一对应。
-
-### 更新
-
-`PUT /api/settings`
-
-部分更新。删除时段时若影响已分配歌曲，首次返回：
-```json
-{ "confirmNeeded": true, "affectedCount": 3 }
-```
-
-再次发送 `confirmed: true` 执行删除。
-
-## 认证
-
-`POST /api/auth/verify`
-
-请求体：
-```json
-{ "password": "admin" }
-```
-
-响应：
-```json
-{ "success": true, "hint": "" }
-```
-
-## 备份与快照
-
-### 立即备份
-
-`POST /api/sync/backup`
-
-响应：
-```json
-{ "success": true, "path": "..." }
-```
-
-### 快照列表
-
-`GET /api/snapshots`
-
-响应：
-```json
-[
-  { "filename": "snapshot-2026-07-25.json", "time": "...", "size": 1234 }
-]
-```
-
-### 恢复快照
-
-`POST /api/snapshots/restore?filename=snapshot-2026-07-25.json`
-
-响应：
-```json
-{ "success": true }
-```
-
-## 检查更新
-
-`GET /api/check-update`
-
-响应：
-```json
-{
-  "hasUpdate": false,
-  "latestVersion": "5.5.0.0",
-  "downloadUrl": ""
-}
-```
-
-## 解密暂存（um-react 桥接）
-
-um-react 在前端完成解密后，把音频交给主应用导入。两个页面可能在**不同设备**上
-（手机解密、电脑导入），因此交接走后端暂存区而非 postMessage。
-
-### 上传暂存
-
-`POST /api/decrypt/stage`（multipart，字段名 `file`）
-
-响应：
-```json
-{ "stageId": "uuid", "filename": "李克勤 - 红日.mp3", "size": 12451935 }
-```
-
-### 查询暂存元信息
-
-`GET /api/decrypt/stage/{id}`
-
-```json
-{ "filename": "李克勤 - 红日.mp3", "size": 12451935, "ext": ".mp3", "imported": false }
-```
-
-### 就地导入歌库（推荐）
-
-`POST /api/decrypt/stage/{id}/import`
-
-服务端直接把暂存文件转入歌库，响应结构与 `/api/files/stash` 一致：
-
-```json
-{ "tempFileName": "uuid.mp3", "title": "李克勤 - 红日", "artist": "" }
-```
-
-**为什么要有这个端点**：此前主应用得先 `GET .../file` 把音频下载回浏览器，
-再 `POST /api/files/stash` 原样传回去。一首 11.88 MB 的歌要在本机 HTTP 上跑三趟
-共 35.6 MB。实测（真实 `.ncm`，Python 直连、排除 curl 进程启动开销）：
-
-| | 耗时 | 传输量 |
-|---|---|---|
-| 旧：下载回来再上传 | ~263 ms | 35.6 MB |
-| 新：就地导入 | **~67 ms** | **11.9 MB** |
-
-已是 MP3 时用 rename 搬运，并优先采用暂存 meta 里的文件名作标题，
-从而跳过 ffprobe（一次约 88 ms，比复制 12 MB 还贵 5 倍）。
-非 MP3（flac/m4a 等）仍走 `StashFile` 转码。
-
-### 下载暂存文件
-
-`GET /api/decrypt/stage/{id}/file`
-
-仍保留，供需要拿到原始字节的场景使用；导入流程已不再需要它。
-
-### 标记已导入 / 删除暂存
-
-`POST /api/decrypt/stage/{id}/imported`：置 `imported=true`。um-react 轮询到该标志后
-用自身的删除逻辑移除卡片，再调用下面的删除接口。
-
-`DELETE /api/decrypt/stage/{id}`：清理暂存文件。
+实现入口见 `GoServer/routes/routes.go`、`GoServer/handlers/` 和 `GoServer/services/`。
