@@ -52,7 +52,7 @@ GoServer/ffmpeg_bctools_mini/dist/ffmpeg.exe
 GoServer/ffmpeg_bctools_mini/dist/ffprobe.exe
 ```
 
-缺少它们时，`build:inject-ffmpeg` 会失败。可按 [FFmpeg 构建说明](../BCTools/GoServer/ffmpeg_bctools_mini/README.md) 重新构建；直接阅读仓库文档时使用 [该目录](GoServer/ffmpeg_bctools_mini/README.md)。
+缺少它们时，`build:inject-ffmpeg` 会失败。可按 [FFmpeg 构建说明](GoServer/ffmpeg_bctools_mini/README.md) 重新构建。
 
 ## 常见问题
 
