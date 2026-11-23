@@ -1,265 +1,234 @@
-# DEVELOPER.md — 小播点歌工具
+# BCTools 开发指南
 
-本文档面向**接手本仓库的开发者**：从 clone 到本地跑起来，再到打 release
-产物，所有命令都在这里。
+本文面向开发和发布维护者。日常使用与数据备份见 [README.md](README.md)，构建环境排障见 [TOOLS.md](TOOLS.md)。
 
-## 0. 项目是什么
+## 1. 组成与运行方式
 
-「小播点歌工具」是揭阳一中广播站的一体化歌单管理工具，三个组成部分：
+| 路径 | 技术与职责 |
+| --- | --- |
+| `Web/` | Vue 3、TypeScript、Vite、Naive UI；主界面与浏览器端交互 |
+| `Web/um-react/` | React、Vite；内嵌 Unlock Music，源码已直接纳入仓库 |
+| `GoServer/` | Go、chi、Wails v3；HTTP API、音频处理、存储、桌面窗口、托盘、插件和更新 |
+| `installer/` | Inno Setup 6；当前安装与卸载流程 |
+| `scripts/` | Node.js 构建、契约生成、更新打包和清理脚本 |
 
-| 子项目 | 技术栈 | 角色 |
-|------|------|------|
-| `Web/` | Vue 3 + Vite + TypeScript + Naive UI | 主前端：歌单 / 点歌 / 导出 / 设置 / 数据迁移 |
-| `Web/um-react/` | React + Vite（[Unlock Music](https://git.um-react.app/um/um-react) 源码直接放进仓库） | ncm / qmc / kgm 浏览器端解密器，嵌进主程序 |
-| `GoServer/` | Go 1.26.11、chi、Wails v3、fyne systray | 单文件 exe 提供 HTTP API、文件转码、桌面窗口和托盘 |
-| `installer/` | Inno Setup 6 | Windows 安装和卸载程序 |
-| `scripts/` | Node（.cjs） | 构建辅助：um-react、注入 ffmpeg、清理等 |
+无参数启动时，程序监听 `0.0.0.0:1743`，打开默认浏览器并显示系统托盘。`bctools.exe desktop` 使用 Wails v3 和 WebView2 打开桌面窗口，同时尽量保留 LAN 监听；端口被占用不妨碍桌面窗口使用本机功能。
 
-构建产物：
-- `dist/bctools.exe` — 单文件主程序（含 Vue 前端、um-react、ffmpeg/ffprobe）
-- `dist/BCTools-Setup.exe` — Windows 安装包
+两种模式共享同一后端和数据目录。`GoServer/launcher/` 负责实例占用、状态查询、浏览器与桌面模式交接；不要让两个后端同时写同一个 `BctoolData`。
 
----
+## 2. 环境准备
 
-## 1. 环境要求
+| 工具 | 版本 | 用途 |
+| --- | --- | --- |
+| Git | 当前稳定版 | 获取源码；um-react 的依赖安装脚本也会调用 |
+| Node.js | 24，CI 使用 24.7.0 | 根脚本与 Vue 构建 |
+| Go | 1.26.11 | 后端、测试与版本资源 |
+| pnpm | 10.15.1，通过 Corepack 使用 | um-react 依赖与构建 |
+| Inno Setup | 6 | Windows 安装包 |
+| MSYS2 UCRT64 | 当前版本 | 仅在重新构建精简 FFmpeg 时需要 |
 
-| 工具 | 最低版本 | 检查 | 说明 |
-|------|--------|------|------|
-| Git | 2.30+ | `git --version` | clone 用 |
-| Node.js | 24+ | `node --version` | 前端 / 构建脚本 |
-| Go | 1.26.11 | `go version` | Windows 后端与版本资源 |
-| pnpm | 10.15.1 | `corepack pnpm@10.15.1 --version` | um-react 依赖 |
-| Inno Setup | 6 | `ISCC.exe` | Windows 安装包 |
-| MSYS2 UCRT64 | 当前版本 | 见 FFmpeg 构建指南 | 编译精简 FFmpeg/ffprobe |
-
-无管理员权限也能跑：用 `corepack pnpm` 代替全局 pnpm；Go 装到用户目录也行。
-
----
-
-## 2. Clone 与首次安装
+获取源码并安装依赖：
 
 ```bash
-git clone <repo-url> bctools
-cd bctools
-
-# 根目录 devDependencies（concurrently 等）— npm run dev / build 入口会自动跑，
-# 也可以手动先装：
+git clone https://github.com/DGHH-Skywalker/BCTools.git
+cd BCTools
 npm ci
-
-# 前端依赖
 npm --prefix Web ci --legacy-peer-deps
-
-# um-react 依赖（用 corepack pnpm，无管理员权限也行）
 corepack pnpm@10.15.1 --dir Web/um-react install --frozen-lockfile
 ```
 
-> `npm run dev` / `npm run build` 都会在执行前自动检查根 `node_modules`；
-> 若缺 `concurrently` 等会先跑一次 `npm install`。前端的 `Web/node_modules`
-> 跟 um-react 的 `Web/um-react/node_modules` 不会被自动安装，需要手动跑上面的命令。
+um-react 已内嵌源码，不需要初始化 Git submodule。根目录的 `predev`、`prebuild` 会检查根级依赖，Vue 和 um-react 的依赖仍需按上面命令安装。
 
----
-
-## 3. 开发
+## 3. 本地开发
 
 ```bash
-# 跑前端 + 后端（Vite 热更新 + go run 后端，并行）
 npm run dev
 ```
 
-行为：
-- `Web/` 走 Vite dev server，端口 5173；自动把 `/api/*` 代理到 `:1743`
-- `GoServer/` 走 `go run . --dev`，端口 1743；`--dev` 标志会顶替已运行的生产版后端
-- 任一进程退出，另一个会被 concurrently `--kill-others-on-fail` 一起杀掉
+该命令并行启动：
 
-单独跑子任务：
+- Vite：`http://localhost:5173`，将 API 代理到 `1743`；
+- Go：`go -C GoServer run . --dev`，必要时接替已有开发后端。
+
+也可分别运行：
 
 ```bash
-npm run dev:web         # 仅 vite
-npm run dev:server      # 仅 go run --dev
+npm run dev:web
+npm run dev:server
 ```
 
----
+`go run` 的开发数据默认写入 `GoServer/BctoolData`，不会使用发布版程序旁的目录。开发前如需保留真实数据，先备份。
 
-## 4. 构建
+## 4. 检查与测试
 
-### 4.1 完整构建
+```bash
+npm run type-check
+npm run test
+npm run lint
+```
+
+这些入口分别覆盖 Vue 类型检查与 Go vet、Vue 与 Go 测试、Vue ESLint。um-react 使用独立工具链：
+
+```bash
+corepack pnpm@10.15.1 --dir Web/um-react exec tsc -p tsconfig.prod.json --noEmit
+corepack pnpm@10.15.1 --dir Web/um-react test
+```
+
+修改 API 契约后重新生成类型，并确认生成文件没有漏提交：
+
+```bash
+npm run generate:api
+git diff -- GoServer/internal/contracts/types.gen.go Web/src/api/generated/contracts.ts
+```
+
+CI 还会执行生成一致性检查、Go 测试、两个前端的检查与测试。
+
+## 5. 构建
+
+先准备 `GoServer/ffmpeg_bctools_mini/dist/ffmpeg.exe` 和 `ffprobe.exe`。重新构建它们的方法见 [FFmpeg 构建说明](GoServer/ffmpeg_bctools_mini/README.md)；CI 会独立编译并缓存。
+
+完整构建：
 
 ```bash
 npm run build
 ```
 
-构建会先并行准备 Vue、um-react 和 FFmpeg，再依次编译 Go 主程序与安装包：
+流程如下：
 
-| 步骤 | 脚本 | 说明 |
-|------|------|------|
-| 并行 1 | `build:web-and-copy` | `Web/`：类型检查、Vite 构建、复制到 `GoServer/embed/dist` |
-| 并行 2 | `build:um-react` | 构建、注入桥接脚本并复制到 `GoServer/embed/um-react/` |
-| 并行 3 | `build:inject-ffmpeg` | 将精简版 ffmpeg/ffprobe 放入 Go 的嵌入目录 |
-| 收敛 1 | `build:server` | 编译 `dist/bctools.exe`（GUI 应用，启动不闪黑框） |
-| 收敛 2 | `build:installer` | 使用 Inno Setup 编译 `dist/BCTools-Setup.exe` |
+1. 并行构建 Vue、um-react，并准备内嵌 FFmpeg；
+2. 将前端产物复制到 Go 的嵌入目录；
+3. 生成 Windows 版本资源并编译 `dist/bctools.exe`；
+4. 调用 Inno Setup 生成 `dist/BCTools-Setup.exe`。
 
-产物：
-- `dist/bctools.exe` 内置前端、um-react 和精简 FFmpeg/ffprobe
-- `dist/BCTools-Setup.exe` 安装包
-
-> 5.6.0 起**不再生成 `bctool_dev.exe`**——所有 dev 模式都走 `npm run dev`（go run）。Release 包只需要主 exe 和 setup。
-
-### 4.2 启动不闪黑框
-主程序用 Go 的 `-H windowsgui` 编译。双击启动系统浏览器，`dist\bctools.exe desktop` 使用桌面窗口。桌面模式依赖 Microsoft Edge WebView2 Runtime。
-
-### 4.3 安装程序
+常用子步骤：
 
 ```bash
-npm run build               # 已经包含 build:installer
-npm run build:installer     # 主程序已经生成时单独构建安装包
-```
-
-脚本从常见路径查找 `ISCC.exe`。自定义安装路径可通过 `ISCC_PATH` 指定。
-
-### 4.4 单独跑某一步
-
-```bash
-npm run build:web           # 仅前端
-npm run build:um-react      # 仅 um-react（含复制到 embed）
-npm run build:copy          # 仅把 Web/dist 复制到 GoServer/embed/dist
-npm run build:inject-ffmpeg # 仅复制 ffmpeg/ffprobe
-npm run build:server-only   # 仅 go build（输出 dist/bctools.exe）
-npm run build:installer     # 仅安装程序
-npm run build:clean         # 清理所有构建产物
-```
-
-### 4.5 清理
-
-```bash
+npm run build:web
+npm run build:copy
+npm run build:um-react
+npm run build:inject-ffmpeg
+npm run build:server-only
+npm run build:installer
 npm run build:clean
-# 删除：Web/dist, GoServer/embed/dist, GoServer/embed/um-react,
-#       GoServer/internal/binembed/bin, dist/, installer/obj, installer/setup.exe
 ```
 
-### 4.6 数据迁移（5.6.0 完整版）
+`ISCC.exe` 不在常见安装路径时，通过 `ISCC_PATH` 指定。主程序使用 `-H windowsgui`，正常启动不显示控制台窗口。
 
-设置页 → 「数据迁移」(`/settings/migration`)。两种导出 + 两种导入，路径输入框可粘贴。
+GitHub Actions 还会生成以下发布文件，本地 `npm run build` 不负责全部生成：
 
-**导出：**
-- **小清单（不带歌）**：下载单个 JSON，含所有元数据（歌名、时段、栏目映射）。包小可微信传；歌曲需在新机器另行导入。
-- **完整搬家（推荐）**：在选定文件夹下新建 `xxxx年xx月xx日广播站点歌工具数据备份N/`，内含 data.json + 所有歌曲 mp3 + 快照 + 删除日志。换电脑时首选。
+- `BCTools-UpdateTargets.zip`：由 `scripts/package-update-feed.ps1` 生成；
+- `FFmpeg-Sources.tar.gz`：FFmpeg 构建开启源码打包后生成；
+- `SHA256SUMS.txt`：发布工作流统一计算。
 
-**导入（两种方式，二选一）：**
-- **从文件夹装回（推荐）**：选完整的备份目录；歌曲文件会一起回来。
-- **从 JSON 文件装回**：选之前下载的清单 JSON；只回歌名与设置，不带音频。
+## 6. 当前架构
 
-**模式：**
-- `merge`（默认）：追加新歌，时段按 ID 合并（自定义的不会被覆盖）
-- `replace`：先清空本机 dorm / broadcast 歌单与时段，再整体装入
+### 请求链路
 
-后端：`POST /api/migration/export`、`POST /api/migration/import`。
-
----
-
-## 5. 测试 / 类型检查
-
-```bash
-npm run type-check     # 前端 vue-tsc + 后端 go vet
-npm run test           # 前端 vitest + 后端 go test
-npm run lint           # 前端 eslint
+```text
+Browser / WebView2
+        ↓
+server.WithUpdateAssets
+        ↓
+chi router
+  /api       兼容原有接口
+  /api/v1    同一组核心接口 + OpenAPI、保留期、插件、酷狗和签名更新
+        ↓
+handlers → services / store → internal/repo
 ```
 
-单独跑：
+- `GoServer/main.go`：启动、实例交接、依赖组装和退出。
+- `GoServer/desktop_windows.go`：WebView2 窗口、桌面保存对话框和桌面专用接口。
+- `GoServer/routes/routes.go`：路由及本机请求边界。
+- `GoServer/server/`：内嵌前端、um-react 和版本化更新资源的静态服务。
+- `GoServer/handlers/`：请求解析与响应。
+- `GoServer/services/`：导入、周音频库、旧版迁移、设置和更新日志。
+- `GoServer/store/`：歌曲、设置、快照与删除日志的数据访问。
 
-```bash
-npm --prefix Web run type-check
-npm --prefix Web run test
+新增扩展接口时，同时核对 OpenAPI 契约、路由权限和前端生成类型。保留期、插件管理、酷狗数据库选择、更新检查与应用等操作有本机请求限制，不要为了联调直接移除。
 
-go -C GoServer test ./...
-go -C GoServer vet ./...
-```
+### 存储布局
 
----
+当前存储版本为 2：
 
-## 6. 目录速查
+- `data.json` 保存存储头、设置、下一歌曲 ID 和周目录索引；
+- `songs-without-audio.json` 保存没有对应音频的歌曲；
+- `MusicFiles/<YYYY年第N周>/songs.json` 保存有音频歌曲及周文件索引；
+- `.storage-transaction.json` 记录文件事务，启动时重放未完成操作；
+- `recycle/<id>/` 保存可恢复的清理批次。
 
-```
-bctools/
+`internal/repo` 在内存中汇总各领域数据，写入时拆分并提交文件事务。不要绕过它直接改写多个存储文件。歌曲 ID 由仓储层分配，批量导入和普通新增都必须遵守同一规则。
+
+覆盖导入前先保存与本次替换对应的快照；备份失败时取消导入。恢复快照和回收记录时，保留文件名与目录边界校验。
+
+默认保留当前及前三个 ISO 周的音频、过去两年的歌曲信息和未来排期。设置页可调整保留期；清理先进入七天回收区。
+
+### 音频处理
+
+- 已是 MP3 的输入直接搬运，避免二次有损转码；其他格式再调用内嵌 FFmpeg。
+- NCM 由 Unlock Music 解码器处理；KGG、KGM、KGMA、VPR 通过酷狗数据库取钥。
+- 酷狗数据库经验证后复制到 `BctoolData/kugou`，源文件暂时缺失时可沿用上一次可用副本。
+- um-react 回传使用 `POST /api/v1/decrypt/stage/{id}/import` 就地入库，不再下载回浏览器后重复上传。
+- SD 卡编号以时段位置为锚点。空时段保留编号并生成 17.43 秒静音占位。
+- 同一时段多首歌在导出时合并，歌库内仍分别保存。合并采用 MP3 帧拼接并处理 ID3 标签；精简 FFmpeg 不包含完整的 concat 组件。
+- 合并音频的单曲试听按原始文件区间读取，保留 Range 与 Seek 处理。
+
+### 插件与更新
+
+插件 ZIP 包含 `manifest.json` 和可选的 `plugin.wasm`。当前权限为 `ui.contribute`、`ui.layout`、`commands.run`、`playlist.read`；WASM 有内存和执行时间限制。插件接口只暴露约定能力，不能直接访问宿主存储。
+
+更新管理器基于 TUF 校验元数据和目标文件，支持资源、网页、插件和 Windows 核心程序。网页更新需确认生效，并保留上一版本用于回滚；核心更新区分便携版与已安装版。发布配置见 [SIGNED_UPDATES.md](docs/SIGNED_UPDATES.md)。
+
+### 安装与数据
+
+当前安装入口是 `installer/BCTools.iss`。`installer/src/` 和旧 Makefile 保留作历史对照，不参与根构建或 CI。
+
+安装器只拥有程序文件和快捷方式，不拥有 `BctoolData`。升级、重装和普通卸载保留数据；交互卸载可由用户选择删除，静默卸载只有显式传入 `/REMOVEUSERDATA` 才删除。
+
+## 7. 目录速查
+
+```text
+BCTools/
 ├── Web/
-│   ├── src/
-│   │   ├── views/             每个路由一个页面
-│   │   ├── components/       可复用组件
-│   │   ├── stores/           Pinia 状态
-│   │   ├── composables/      与 UI 解耦的逻辑
-│   │   ├── api/              axios 客户端 + 按领域拆分
-│   │   ├── utils/            无状态工具（datetime / persist / playlistTable）
-│   │   ├── constants/        Design Token（colors.ts）
-│   │   ├── i18n/             i18n 实现（默认 zh-CN）
-│   │   └── locales/          zh-CN.json / en.json
-│   ├── um-react/              Unlock Music 源码（已从子模块改为内嵌）
-│   ├── scripts/               subset-fonts.cjs / um-react-bridge.js
-│   └── package.json
+│   ├── src/                     Vue 页面、组件、状态、API 与工具
+│   └── um-react/                Unlock Music React 源码
 ├── GoServer/
-│   ├── main.go                主程序入口（systray + 关闭流程）
-│   ├── routes/                chi 路由表
-│   ├── handlers/              HTTP handler（每个领域一个文件）
-│   ├── services/              业务逻辑（organize / import / migration / settings）
-│   ├── store/                 领域数据访问（song / setting / snapshot / deletedlog）
-│   ├── internal/
-│   │   ├── repo/              data.json 原子读写
-│   │   ├── binembed/          ffmpeg/ffprobe 嵌入与释放
-│   │   └── version/           单一版本号来源
-│   ├── converter/             音频转码（FFmpeg 包装 / 合并 / 静音占位）
-│   ├── embed/
-│   │   ├── dist/              嵌入的 Vue 前端产物（go:embed）
-│   │   └── um-react/          嵌入的 um-react 产物（go:embed）
-│   ├── ffmpeg_bctools_mini/   项目内置精简版 ffmpeg/ffprobe 源
-│   ├── tray/                  Windows systray 封装（含 DPI 感知）
-│   ├── assets/                图标等静态资源
-│   └── cmd/devlauncher/       开发模式启动器
-├── installer/
-│   ├── src/                   C++ 源码（Win32 / GDI+）
-│   ├── res/                   图标 / 字体 / 待打包 exe（构建期填入）
-│   └── Makefile
-├── scripts/                   Node 构建辅助（build-web / build-um-react / inject-ffmpeg / clean-all）
-├── docs/                      设计与历史交接文档
-├── package.json               根 npm 入口（dev / build 链）
-├── DEVELOPER.md               ← 你正在看的文档
-├── CLAUDE.md                  Claude/Agent 工作约束（项目内）
-└── package.json               唯一的开发与构建入口
+│   ├── main.go                  进程入口与依赖组装
+│   ├── routes/                  路由与本机访问控制
+│   ├── handlers/                HTTP handler
+│   ├── services/                业务编排与迁移
+│   ├── store/                   领域数据访问
+│   ├── internal/repo/           拆分存储、事务与保留期
+│   ├── internal/contracts/      OpenAPI 与生成类型
+│   ├── internal/plugins/        插件包、权限和 WASM 运行时
+│   ├── internal/updates/        TUF 更新与核心程序交接
+│   ├── internal/kugoudb/        酷狗数据库发现、验证与副本
+│   ├── converter/               解密、转码、合并与静音
+│   ├── launcher/                单实例与模式交接
+│   ├── server/                  前端和更新资源服务
+│   └── ffmpeg_bctools_mini/     精简 FFmpeg 构建
+├── installer/                   Inno Setup 与旧安装器源码
+├── scripts/                     构建、测试和发布脚本
+└── docs/                        运维文档与历史版本记录
 ```
 
----
+## 8. 发布
 
-## 7. 关键约束（修改前必读）
+发布前同步以下版本信息：
 
-这些是 5.6.0 沉淀下来的「改了会炸」的不成文规定，新人务必读完：
+- 根 `package.json` 与锁文件；
+- `Web/package.json` 与锁文件；
+- `GoServer/internal/version/version.go`；
+- `GoServer/versioninfo.json` 中的 Windows 数字文件版本和产品版本。
 
-- **音频转码**：`converter/process.go` 的 `toMP3()` 已实现「已是 MP3 就跳过重编码」。一首歌重编码 ~4.8s，搬运 ~1ms，且能避免二次有损。**不要**改回无条件 `ConvertToMP3`。
-- **um-react 导入**：走 `POST /api/decrypt/stage/:id/import` **就地入库**到 `%APPDATA%\BroadcastTool\songs`，不要改回「下载回浏览器再上传」——一首 12MB 的歌要少跑 ~200ms。
-- **换卡导出（organize）**：编号锚定「时段位置」不是歌曲（见 `Web/src/utils/exportEntries.ts`）。空时段必须生成静音占位，否则整天空着会让后面曲序整体前移。同一时段多首歌合并成一个 MP3：`converter/merge.go` 用字节拼接 + 剥 ID3 标签，**不要**改成 ffmpeg concat（精简版 ffmpeg 没那个 demuxer）。
-- **进程退出**：托盘 / Ctrl-C / 前端 `POST /api/shutdown` 三条路径都汇聚到 `main.go` 里同一个 `sync.Once` 保护的 shutdown 函数。`tray.Run` 占用主 goroutine（systray 要求 LockOSThread），**不要**把它挪到子 goroutine。
-- **segmentit**：词典约 1.25 MB（gzip），动态 `import()`，未就绪时 `segmentChineseTitle` 原样返回标题。**不要**改回静态 import。
-- **托盘 DPI**：Win32 弹菜单默认是 Win95 API 不跟随系统缩放。`tray/dpi_windows.go` 在 init() 里声明 Per-Monitor V2 DPI awareness，右键菜单在 2K/4K 屏上才不糊。**不要**删这个文件。
-- **文件夹选择器**：`GoServer/handlers/selectdir_windows.go` 用 `IFileOpenDialog + FOS_PICKFOLDERS`（Vista+），不跟随 `SHBrowseForFolderW`（Win95）。**不要**回退。
+应用显示版本与 Windows 四段数字文件版本是两套字段，发布工作流都会检查。
 
----
+1. 添加与根 `package.json` 对应的 `docs/releases/v<version>.md`；
+2. 推送 `v<version>` 标签；
+3. Release 工作流校验标签，复用 Build 工作流，核对校验值并发布附件；
+4. 版本号包含预发行标识时，GitHub Release 自动标记为 prerelease。
 
-## 8. 常见问题
+发布签名更新还需配置更新仓库和信任根，并将更新目标交给 TUF-on-CI 签名。不要仅上传 EXE 就认为客户端已能收到更新。
 
-**Q：`go run . -- --dev` 在 npm run dev 下不生效？**
-A：`go run` 接收参数用 `--` 分隔。Windows Git Bash + npm 链里这层转义有时候会丢。可以用环境变量：
-在 PowerShell 跑 `$env:BCTOOLS_DEV=1; npm run dev:server` 临时替代（需要在 main.go 加上 env 路径）。
-当前默认 `--dev` 是通过的；遇到再排查。
+## 9. 文档维护
 
-**Q：精简版 ffmpeg 在哪？**
-A：在 MSYS2 UCRT64 中运行 `GoServer/ffmpeg_bctools_mini/build.sh`，产物位于该目录的 `dist/`。GitHub Actions 会编译并缓存。缺少产物时完整构建会在嵌入步骤报告错误。
-
-**Q：构建时 Go 报 `undefined: services`？**
-A：检查 `GoServer/main.go` 顶部 imports 是否含 `broadcast-tool/services`。5.6.0 后已加。
-
-**Q：Vue 端 npm run test 出现 `No match found for location with path ""`？**
-A：单测里 `<router-link>` 没有显式 path 时会触发该警告。已在 `DormManage.test.ts` 加了 stub router，不影响功能。
-
----
-
-## 9. 发版流程
-
-应用显示版本在 `package.json`、`Web/package.json`、相应锁文件和 `GoServer/internal/version/version.go` 同步。Windows 数字文件版本和显示产品版本分别来自 `GoServer/versioninfo.json`。安装包构建读取这两组值。
-
-`Build` 工作流在 `main` 提交和 PR 上执行检查并生成 Windows 构建产物，也支持手动运行。推送匹配应用版本的标签后，`Release` 工作流复用构建并发布 EXE、安装包、更新目标包和 SHA-256 校验清单。`v6.0.0-beta1` 为预发行版。更新目标包的签名和更新仓库配置见 [签名更新](docs/SIGNED_UPDATES.md)。
+README、开发指南和运维文档描述当前版本。`docs/releases/` 与 `.claude/plans/` 是历史记录，保留当时的版本语境。修改架构、命令、数据布局或发布流程时，应同步检查当前文档和中英文界面文案。
