@@ -13,7 +13,7 @@ import (
 	"broadcast-tool/paths"
 )
 
-// Repository provides atomic, mutex-protected access to data.json.
+// Repository provides mutex-protected access to the transactional split storage layout.
 type Repository struct {
 	mu         sync.RWMutex
 	appDataDir string
@@ -41,7 +41,7 @@ func New(appDataDir string, logger func(format string, args ...interface{})) (*R
 // AppDataDir returns the application data directory.
 func (r *Repository) AppDataDir() string { return r.appDataDir }
 
-// DataPath returns the path to data.json.
+// DataPath returns the path to the storage header in data.json.
 func (r *Repository) DataPath() string { return r.dataPath }
 
 // Read runs the given function with a read lock held.
@@ -51,7 +51,7 @@ func (r *Repository) Read(fn func(*Data)) {
 	fn(&r.data)
 }
 
-// Write runs the given function with a write lock held and persists data.json atomically.
+// Write runs the given function with a write lock held and commits the storage transaction.
 func (r *Repository) Write(fn func(*Data) error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
